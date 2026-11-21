@@ -37,7 +37,7 @@ func run(m *testing.M) int {
 		tcpostgres.WithUsername("owner"),
 		tcpostgres.WithPassword("test-only"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").
-			WithOccurrence(2).WithStartupTimeout(60*time.Second)),
+			WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "subir Postgres: %v\n", err)

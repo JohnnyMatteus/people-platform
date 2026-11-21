@@ -39,7 +39,7 @@ Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pront
 | --- | --- | --- | --- |
 | [`services/tenant-service`](services/tenant-service) | Go | Tenants, planos e features, white label, domínios, resolução de tenant | ✅ |
 | [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI | 🟡 núcleo de domínio |
-| `services/recruitment-service` | PHP + Laravel | ATS | 📝 [contrato](contracts/openapi/recruitment-service.yaml) |
+| [`services/recruitment-service`](services/recruitment-service) | PHP + Laravel | ATS: vagas, candidaturas, pipeline por tenant, entrevistas, scorecards, `CandidatoContratado` | ✅ |
 | `services/engagement-service` | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | 📝 [contrato](contracts/openapi/engagement-service.yaml) |
 | `services/analytics-ai-service` | Python + FastAPI | People analytics e recursos de IA | 📝 [contrato](contracts/openapi/analytics-ai-service.yaml) |
 | `services/learning-service` | a definir | Aprendizagem (LXM) | 📋 |
@@ -186,7 +186,7 @@ Os roteiros de entrevista sobre os núcleos explicam a solução, as alternativa
 
 1. **performance-service:** camada Spring Boot conforme o [OpenAPI](contracts/openapi/performance-service.yaml), persistência com RLS, consumo de `TenantCriado` e publicação de `NineBoxCalibrado`.
 2. **Provisionador do Keycloak:** consumir `TenantCriado` e criar a Organization.
-3. **recruitment-service (Laravel), engagement-service (NestJS) e analytics-ai-service (FastAPI)** a partir dos contratos esboçados, cada um com RLS, outbox e testes de vazamento.
+3. **engagement-service (NestJS) e analytics-ai-service (FastAPI)** a partir dos contratos esboçados, cada um com RLS, outbox e testes de vazamento.
 4. **Fluxo de exclusão de titular (LGPD)** ponta a ponta e limpeza da outbox.
 5. **Front-end Vue 3** consumindo `/branding`, com configurador de tema e prévia de contraste.
 6. **Kubernetes** (Helm e GitOps), Schema Registry e Debezium.

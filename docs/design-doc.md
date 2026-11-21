@@ -151,7 +151,7 @@ Relações principais:
 | --- | --- | --- | --- |
 | tenant-service | Go | Tenants, planos e features, white label, domínios, resolução de tenant, `TenantCriado` | Implementado |
 | performance-service | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs, PDI | Núcleo de domínio (nine box, calibração, histórico, sucessão) |
-| recruitment-service | PHP + Laravel | ATS | Contrato esboçado |
+| recruitment-service | PHP + Laravel | ATS | Implementado |
 | engagement-service | TypeScript + NestJS | Feedback, elogios, 1:1, clima, gamificação, rede social | Contrato esboçado |
 | analytics-ai-service | Python + FastAPI | People analytics e IA | Contrato esboçado |
 | learning-service | a definir | LXM | Documentado |

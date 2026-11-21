@@ -1,0 +1,40 @@
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+config.local.yaml
+data/
+
+# Go
+*.test
+*.out
+coverage.*
+/services/tenant-service/bin/
+
+# Kotlin / Gradle
+.gradle/
+build/
+!**/src/**/build/
+*.class
+.kotlin/
+
+# PHP
+vendor/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# IDE / SO
+.idea/
+.vscode/
+*.iml
+.DS_Store

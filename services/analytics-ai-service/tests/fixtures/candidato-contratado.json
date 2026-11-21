@@ -1,0 +1,16 @@
+{
+  "event_id": "00000000-0000-4000-8000-000000000001",
+  "event_type": "CandidatoContratado",
+  "event_version": 1,
+  "tenant_id": "11111111-1111-4111-8111-111111111111",
+  "aggregate_id": "33333333-3333-4333-8333-333333333331",
+  "occurred_at": "2026-09-01T12:00:00Z",
+  "producer": "recruitment-service",
+  "data": {
+    "job_id": "44444444-4444-4444-8444-444444444441",
+    "application_id": "33333333-3333-4333-8333-333333333331",
+    "position_title": "Analista",
+    "unit": "Matriz",
+    "start_date": "2026-07-15"
+  }
+}

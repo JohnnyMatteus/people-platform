@@ -1,0 +1,31 @@
+{
+  "event_id": "00000000-0000-4000-8000-000000000004",
+  "event_type": "PesquisaClimaEncerrada",
+  "event_version": 1,
+  "tenant_id": "11111111-1111-4111-8111-111111111111",
+  "aggregate_id": "66666666-6666-4666-8666-666666666661",
+  "occurred_at": "2026-09-01T12:00:00Z",
+  "producer": "engagement-service",
+  "data": {
+    "survey_id": "66666666-6666-4666-8666-666666666661",
+    "min_group_size": 5,
+    "segments": [
+      {
+        "segment_key": "area:operacoes",
+        "respondents": 12,
+        "scores": {
+          "lideranca": 3.1,
+          "reconhecimento": 2.8
+        }
+      },
+      {
+        "segment_key": "area:financeiro",
+        "respondents": 7,
+        "scores": {
+          "lideranca": 4.2,
+          "reconhecimento": 3.9
+        }
+      }
+    ]
+  }
+}

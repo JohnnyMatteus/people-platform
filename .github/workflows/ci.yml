@@ -23,6 +23,7 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       tenant-service: ${{ steps.filter.outputs.tenant-service }}
       performance-service: ${{ steps.filter.outputs.performance-service }}
+      analytics-ai-service: ${{ steps.filter.outputs.analytics-ai-service }}
       platform: ${{ steps.filter.outputs.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +41,10 @@ jobs:
               - '.github/workflows/ci.yml'
             performance-service:
               - 'services/performance-service/**'
+              - '.github/workflows/ci.yml'
+            analytics-ai-service:
+              - 'services/analytics-ai-service/**'
+              - 'contracts/asyncapi/schemas/**'
               - '.github/workflows/ci.yml'
             platform:
               - 'docker-compose*.yml'
@@ -100,6 +105,29 @@ jobs:
       - name: Lint, testes e build (ktlint + JUnit)
         run: gradle --no-daemon --console=plain ktlintCheck test build
 
+  analytics-ai-service:
+    needs: changes
+    if: needs.changes.outputs.analytics-ai-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/analytics-ai-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/analytics-ai-service/pyproject.toml
+      - name: Instala dependências
+        run: pip install -e ".[dev]"
+      - name: Lint (ruff + mypy)
+        run: ruff check . && ruff format --check . && mypy src
+      - name: Testes (LLM falso, fixtures dos schemas)
+        run: pytest -q
+      - name: Imagem Docker
+        run: docker build -t people-platform/analytics-ai-service:ci .
+
   platform:
     needs: changes
     if: needs.changes.outputs.platform == 'true'
@@ -107,7 +135,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile analytics-ai-service config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido

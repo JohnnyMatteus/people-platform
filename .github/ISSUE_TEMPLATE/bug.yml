@@ -1,0 +1,36 @@
+name: Bug
+description: Algo não funciona como deveria.
+labels: [bug]
+body:
+  - type: dropdown
+    id: service
+    attributes:
+      label: Serviço
+      options: [tenant-service, performance-service, contratos, infraestrutura, documentação, outro]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: Comportamento observado. Não inclua dados pessoais reais.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: O que era esperado
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      description: Comandos, requisições e tenant fictício usado.
+      render: shell
+  - type: checkboxes
+    id: tenant
+    attributes:
+      label: Isolamento
+      options:
+        - label: O bug pode expor dados de um tenant a outro (prioridade máxima)

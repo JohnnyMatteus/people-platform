@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Descobre o que mudou para rodar só os jobs afetados (monorepo poliglota).
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      contracts: ${{ steps.filter.outputs.contracts }}
+      tenant-service: ${{ steps.filter.outputs.tenant-service }}
+      performance-service: ${{ steps.filter.outputs.performance-service }}
+      platform: ${{ steps.filter.outputs.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            contracts:
+              - 'contracts/**'
+              - '.spectral.yaml'
+              - '.github/workflows/ci.yml'
+            tenant-service:
+              - 'services/tenant-service/**'
+              - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            performance-service:
+              - 'services/performance-service/**'
+              - '.github/workflows/ci.yml'
+            platform:
+              - 'docker-compose*.yml'
+              - 'infra/**'
+              - 'init/**'
+              - 'scripts/**'
+              - '.env.example'
+              - '.github/workflows/ci.yml'
+
+  contracts:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Spectral (OpenAPI 3.1 + AsyncAPI 3.0)
+        run: npx -y @stoplight/spectral-cli@6.15.0 lint "contracts/openapi/*.yaml" "contracts/asyncapi/*.yaml" --fail-severity=warn
+      - name: JSON Schemas dos eventos são JSON válido
+        run: for f in contracts/asyncapi/schemas/*.json; do python3 -m json.tool "$f" > /dev/null; done
+
+  tenant-service:
+    needs: changes
+    if: needs.changes.outputs.tenant-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/tenant-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/tenant-service/go.mod
+          cache-dependency-path: services/tenant-service/go.sum
+      - name: Lint (gofmt + go vet)
+        run: make lint
+      - name: Testes (unitários + Postgres real via testcontainers)
+        run: make test
+      - name: Build
+        run: make build
+      - name: Imagem Docker
+        run: docker build -t people-platform/tenant-service:ci .
+
+  performance-service:
+    needs: changes
+    if: needs.changes.outputs.performance-service == 'true'
+    runs-on: ubuntu-latest
+    # Mesma imagem usada localmente (Java e Gradle não são pré-requisitos da máquina).
+    container:
+      image: gradle:8.14.3-jdk21
+    defaults:
+      run:
+        working-directory: services/performance-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint, testes e build (ktlint + JUnit)
+        run: gradle --no-daemon --console=plain ktlintCheck test build
+
+  platform:
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config (todos os perfis)
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service config -q
+      - name: KrakenD valida a configuração do gateway
+        run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
+      - name: Realm do Keycloak é JSON válido
+        run: python3 -m json.tool infra/keycloak/realm-people.json > /dev/null
+      - name: ShellCheck nos scripts
+        run: shellcheck scripts/*.sh init/aws/*.sh infra/postgres/init/*.sh

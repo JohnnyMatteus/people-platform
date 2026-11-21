@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/avaliacao-concluida.v1.json",
+  "title": "AvaliacaoConcluida v1",
+  "description": "A avaliação consolidada de uma pessoa num ciclo foi concluída. Alimenta a sessão de calibração do nine box e os gaps do PDI.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "AvaliacaoConcluida" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "performance-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cycle_id", "employee_id", "performance_score", "potential_score", "competency_gaps"],
+      "properties": {
+        "cycle_id": { "type": "string", "format": "uuid" },
+        "employee_id": { "type": "string", "format": "uuid" },
+        "performance_score": { "type": "string", "description": "Decimal em string, na escala do tenant." },
+        "potential_score": { "type": "string" },
+        "competency_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["competency", "gap"],
+            "properties": { "competency": { "type": "string" }, "gap": { "type": "integer", "minimum": 0 } }
+          }
+        }
+      }
+    }
+  }
+}

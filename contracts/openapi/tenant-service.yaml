@@ -1,0 +1,703 @@
+openapi: 3.1.0
+info:
+  title: People Platform - tenant-service
+  version: 1.0.0
+  summary: Registro de tenants, planos e feature flags, white label e resolução de tenant.
+  description: |
+    API do tenant-service. Os erros seguem o RFC 9457 (`application/problem+json`).
+    Recursos de outro tenant respondem 404 (não 403), para não revelar quais IDs existem.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+servers:
+  - url: http://localhost:8000/tenant
+    description: Gateway local (KrakenD)
+  - url: http://localhost:8081
+    description: Serviço direto (desenvolvimento)
+security:
+  - bearerAuth: []
+tags:
+  - name: tenants
+    description: Cadastro e ciclo de vida de tenants (operador da plataforma).
+  - name: plans
+    description: Catálogo de planos e features efetivas.
+  - name: white-label
+    description: Tema, logo e domínios próprios.
+  - name: resolution
+    description: Resolução de tenant por host ou por claim.
+  - name: ops
+    description: Saúde e métricas.
+paths:
+  /v1/plans:
+    get:
+      tags: [plans]
+      operationId: listPlans
+      summary: Lista o catálogo de planos.
+      security: []
+      responses:
+        "200":
+          description: Catálogo de planos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+  /v1/branding:
+    get:
+      tags: [resolution]
+      operationId: getBrandingByHost
+      summary: Resolve o tenant pelo domínio acessado e devolve a identidade visual.
+      description: |
+        Rota pública, chamada antes do login. Usa `X-Forwarded-Host` (repassado pelo gateway) ou `Host`.
+        Só tenants ativos são resolvidos.
+      security: []
+      parameters:
+        - name: X-Forwarded-Host
+          in: header
+          required: false
+          schema:
+            type: string
+            examples: [rh.horizonte.example.com]
+      responses:
+        "200":
+          description: Identidade visual do tenant.
+          headers:
+            Cache-Control:
+              description: Cache público curto.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branding"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/me/tenant:
+    get:
+      tags: [resolution]
+      operationId: getBrandingByClaim
+      summary: Resolve o tenant pela claim tenant_id do token.
+      responses:
+        "200":
+          description: Identidade visual do tenant do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branding"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/tenants:
+    get:
+      tags: [tenants]
+      operationId: listTenants
+      summary: Lista todos os tenants (operador da plataforma).
+      responses:
+        "200":
+          description: Tenants ordenados por slug.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [tenants]
+      operationId: createTenant
+      summary: Cria um tenant e publica TenantCriado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenantRequest"
+      responses:
+        "201":
+          description: Tenant criado.
+          headers:
+            Location:
+              description: URL do tenant criado.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+  /v1/tenants/{id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    get:
+      tags: [tenants]
+      operationId: getTenant
+      summary: Busca um tenant (operador ou membro do próprio tenant).
+      responses:
+        "200":
+          description: Tenant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [tenants]
+      operationId: updateTenant
+      summary: Altera nome, plano ou status. Mudança de plano publica TenantPlanoAlterado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchTenantRequest"
+      responses:
+        "200":
+          description: Tenant alterado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      tags: [tenants]
+      operationId: deactivateTenant
+      summary: Desativa o tenant (sem apagar dados; exclusão física segue o fluxo de LGPD).
+      responses:
+        "204":
+          description: Tenant desativado.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/tenants/{id}/features:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    get:
+      tags: [plans]
+      operationId: getFeatures
+      summary: Features efetivas (plano + overrides).
+      responses:
+        "200":
+          description: Features efetivas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Features"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/tenants/{id}/features/{feature}:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+      - name: feature
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/Feature"
+    put:
+      tags: [plans]
+      operationId: setFeatureOverride
+      summary: Liga ou desliga uma feature dentro do que o plano permite.
+      description: Ligar adicionais é exclusivo do operador; o admin do tenant só desliga.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Features efetivas após o override.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Features"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/FeatureLocked"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+  /v1/tenants/{id}/theme:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    get:
+      tags: [white-label]
+      operationId: getTheme
+      summary: Tema do tenant (ou o padrão da plataforma).
+      responses:
+        "200":
+          description: Tema com tokens e verificações de contraste.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Theme"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [white-label]
+      operationId: setTheme
+      summary: Define o tema white label. Recusa contraste abaixo de 4.5:1 (WCAG AA).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThemeRequest"
+      responses:
+        "200":
+          description: Tema gravado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Theme"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+  /v1/tenants/{id}/theme/logo-upload:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    post:
+      tags: [white-label]
+      operationId: createLogoUpload
+      summary: Gera URL pré-assinada para enviar o logo direto ao bucket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [content_type]
+              properties:
+                content_type:
+                  type: string
+                  enum: [image/png, image/svg+xml, image/webp]
+      responses:
+        "201":
+          description: Autorização de upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoUpload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+  /v1/tenants/{id}/domains:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    get:
+      tags: [white-label]
+      operationId: listDomains
+      summary: Lista os domínios próprios do tenant.
+      responses:
+        "200":
+          description: Domínios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domains]
+                properties:
+                  domains:
+                    type: array
+                    items:
+                      type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [white-label]
+      operationId: addDomain
+      summary: Associa um domínio próprio (exige a feature custom_domain).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [host]
+              properties:
+                host:
+                  type: string
+                  examples: [rh.horizonte.example.com]
+      responses:
+        "201":
+          description: Domínio associado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [host]
+                properties:
+                  host:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+  /healthz:
+    get:
+      tags: [ops]
+      operationId: healthz
+      summary: Liveness.
+      security: []
+      responses:
+        "200":
+          description: Processo vivo.
+  /readyz:
+    get:
+      tags: [ops]
+      operationId: readyz
+      summary: Readiness (Postgres e Kafka).
+      security: []
+      responses:
+        "200":
+          description: Pronto.
+        "503":
+          description: Alguma dependência indisponível.
+  /metrics:
+    get:
+      tags: [ops]
+      operationId: metrics
+      summary: Métricas Prometheus.
+      security: []
+      responses:
+        "200":
+          description: Formato de exposição Prometheus.
+          content:
+            text/plain:
+              schema:
+                type: string
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token do Keycloak (realm people) com claims tenant_id e realm_access.roles.
+  parameters:
+    TenantId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: JSON malformado ou com campos desconhecidos.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Token ausente, inválido ou expirado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Sem permissão para a operação.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Recurso inexistente ou de outro tenant.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Recurso já existe (slug ou domínio).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    FeatureLocked:
+      description: Feature indisponível no plano do tenant.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ValidationFailed:
+      description: Campos inválidos, com o motivo de cada um.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          examples: [urn:people:validation]
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+    PlanCode:
+      type: string
+      enum: [essencial, crescimento, corporativo]
+    Feature:
+      type: string
+      enum: [recruitment, performance, nine_box, succession, okr, idp, engagement, climate_survey, analytics, ai_assist, learning, custom_domain]
+    TenantStatus:
+      type: string
+      enum: [active, suspended, deactivated]
+    Tenant:
+      type: object
+      required: [id, slug, name, plan, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          pattern: "^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$"
+          examples: [construtora-horizonte]
+        name:
+          type: string
+          examples: [Construtora Horizonte Exemplo]
+        plan:
+          $ref: "#/components/schemas/PlanCode"
+        status:
+          $ref: "#/components/schemas/TenantStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateTenantRequest:
+      type: object
+      additionalProperties: false
+      required: [slug, name, plan]
+      properties:
+        slug:
+          type: string
+          pattern: "^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$"
+        name:
+          type: string
+          maxLength: 120
+        plan:
+          $ref: "#/components/schemas/PlanCode"
+    PatchTenantRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        plan:
+          $ref: "#/components/schemas/PlanCode"
+        status:
+          $ref: "#/components/schemas/TenantStatus"
+    Plan:
+      type: object
+      required: [code, name, included, addable]
+      properties:
+        code:
+          $ref: "#/components/schemas/PlanCode"
+        name:
+          type: string
+        included:
+          type: array
+          items:
+            $ref: "#/components/schemas/Feature"
+        addable:
+          type: array
+          items:
+            $ref: "#/components/schemas/Feature"
+    Features:
+      type: object
+      required: [plan, effective, overrides]
+      properties:
+        plan:
+          $ref: "#/components/schemas/PlanCode"
+        effective:
+          type: array
+          items:
+            $ref: "#/components/schemas/Feature"
+        overrides:
+          type: object
+          additionalProperties:
+            type: boolean
+    HexColor:
+      type: string
+      pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+    ThemeRequest:
+      type: object
+      additionalProperties: false
+      required: [primary, on_primary, background, text, accent, email_from_name]
+      properties:
+        primary:
+          $ref: "#/components/schemas/HexColor"
+        on_primary:
+          $ref: "#/components/schemas/HexColor"
+        background:
+          $ref: "#/components/schemas/HexColor"
+        text:
+          $ref: "#/components/schemas/HexColor"
+        accent:
+          $ref: "#/components/schemas/HexColor"
+        logo_url:
+          type: string
+          format: uri
+        email_from_name:
+          type: string
+          maxLength: 80
+        email_reply_to:
+          type: string
+          format: email
+    ContrastCheck:
+      type: object
+      required: [pair, ratio, pass]
+      properties:
+        pair:
+          type: string
+          enum: [on_primary/primary, text/background, accent/background]
+        ratio:
+          type: number
+          minimum: 1
+          maximum: 21
+        pass:
+          type: boolean
+    Tokens:
+      type: object
+      description: Design tokens semânticos consumidos pelo front-end como CSS custom properties.
+      required: [color.primary, color.on-primary, color.background, color.text, color.accent]
+      properties:
+        color.primary:
+          type: string
+        color.on-primary:
+          type: string
+        color.background:
+          type: string
+        color.text:
+          type: string
+        color.accent:
+          type: string
+    Theme:
+      type: object
+      required: [tokens, email_from_name, contrast]
+      properties:
+        tokens:
+          $ref: "#/components/schemas/Tokens"
+        logo_url:
+          type: string
+        email_from_name:
+          type: string
+        email_reply_to:
+          type: string
+        contrast:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContrastCheck"
+    Branding:
+      type: object
+      required: [tenant_id, slug, name, tokens]
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        tokens:
+          $ref: "#/components/schemas/Tokens"
+        logo_url:
+          type: string
+    LogoUpload:
+      type: object
+      required: [upload_url, public_url, expires_at]
+      properties:
+        upload_url:
+          type: string
+          description: URL pré-assinada para PUT com o mesmo Content-Type pedido.
+        public_url:
+          type: string
+          description: URL a gravar em logo_url depois do upload.
+        expires_at:
+          type: string
+          format: date-time

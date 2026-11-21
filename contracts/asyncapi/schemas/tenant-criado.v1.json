@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/tenant-criado.v1.json",
+  "title": "TenantCriado v1",
+  "description": "Um tenant foi criado. Consumidores provisionam a Organization no Keycloak e a configuração inicial de cada serviço.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "TenantCriado" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "tenant-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "name", "plan", "features"],
+      "properties": {
+        "slug": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$" },
+        "name": { "type": "string", "maxLength": 120 },
+        "plan": { "type": "string", "enum": ["essencial", "crescimento", "corporativo"] },
+        "features": { "type": "array", "items": { "type": "string", "enum": ["recruitment", "performance", "nine_box", "succession", "okr", "idp", "engagement", "climate_survey", "analytics", "ai_assist", "learning", "custom_domain"] }, "uniqueItems": true }
+      }
+    }
+  }
+}

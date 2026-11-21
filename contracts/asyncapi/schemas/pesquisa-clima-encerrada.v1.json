@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/pesquisa-clima-encerrada.v1.json",
+  "title": "PesquisaClimaEncerrada v1",
+  "description": "Uma pesquisa de clima foi encerrada. Carrega só agregados por segmento que atingiram o tamanho mínimo k (ADR 0007); nunca respostas individuais nem identidade.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "PesquisaClimaEncerrada" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "engagement-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["survey_id", "min_group_size", "segments"],
+      "properties": {
+        "survey_id": { "type": "string", "format": "uuid" },
+        "min_group_size": { "type": "integer", "minimum": 3 },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["segment_key", "respondents", "scores"],
+            "properties": {
+              "segment_key": { "type": "string" },
+              "respondents": { "type": "integer", "minimum": 3 },
+              "scores": { "type": "object", "additionalProperties": { "type": "number" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

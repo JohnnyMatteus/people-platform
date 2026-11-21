@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/tenant-plano-alterado.v1.json",
+  "title": "TenantPlanoAlterado v1",
+  "description": "O plano do tenant mudou. Carrega as features efetivas para os serviços ligarem ou desligarem módulos.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "TenantPlanoAlterado" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "tenant-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["previous_plan", "plan", "features"],
+      "properties": {
+        "previous_plan": { "type": "string", "enum": ["essencial", "crescimento", "corporativo"] },
+        "plan": { "type": "string", "enum": ["essencial", "crescimento", "corporativo"] },
+        "features": { "type": "array", "items": { "type": "string", "enum": ["recruitment", "performance", "nine_box", "succession", "okr", "idp", "engagement", "climate_survey", "analytics", "ai_assist", "learning", "custom_domain"] }, "uniqueItems": true }
+      }
+    }
+  }
+}

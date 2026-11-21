@@ -1,0 +1,80 @@
+openapi: 3.1.0
+info:
+  title: People Platform - analytics-ai-service
+  version: 0.0.1
+  summary: People analytics agregado e recursos de IA com saída validada por schema.
+  description: |
+    Esboço de contrato. O serviço será construído numa próxima rodada; este arquivo fixa os
+    recursos principais e as convenções (bearer JWT com tenant_id, problem+json, paginação por cursor).
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+servers:
+  - url: http://localhost:8000/analytics
+    description: Gateway local (KrakenD)
+security:
+  - bearerAuth: []
+tags:
+  - name: analytics
+    description: People analytics agregado e recursos de IA com saída validada por schema.
+paths:
+  /v1/analytics/turnover:
+    get:
+      tags: [analytics]
+      operationId: turnover
+      summary: Turnover agregado por área, unidade ou faixa demográfica (grupos menores que k suprimidos).
+      parameters:
+        - name: group_by
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [area, unit, tenure_band, age_band]
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            examples: [2026-Q3]
+      responses:
+        "200":
+          description: Série agregada.
+  /v1/ai/feedback-drafts:
+    post:
+      tags: [analytics]
+      operationId: draftFeedback
+      summary: Rascunho de feedback a partir de tópicos; saída validada por schema.
+      responses:
+        "200":
+          description: Rascunho (sugestão; nunca enviado sem confirmação).
+        "422":
+          description: Saída da IA inválida após nova tentativa (ai_output_invalid).
+  /v1/ai/idp-suggestions:
+    post:
+      tags: [analytics]
+      operationId: suggestIdpActions
+      summary: Sugestões de ações de PDI a partir dos gaps de competência.
+      responses:
+        "200":
+          description: Sugestões estruturadas.
+        "422":
+          description: Saída da IA inválida após nova tentativa.
+  /v1/ai/climate-action-plans:
+    post:
+      tags: [analytics]
+      operationId: draftClimateActionPlan
+      summary: Proposta de plano de ação a partir de resultados agregados de clima.
+      responses:
+        "200":
+          description: Proposta de plano.
+        "422":
+          description: Saída da IA inválida após nova tentativa.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

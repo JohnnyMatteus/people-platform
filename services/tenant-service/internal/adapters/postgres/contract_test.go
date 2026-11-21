@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -18,15 +19,36 @@ import (
 // que publica contra o mesmo JSON Schema que os consumidores leem (contract test do produtor).
 var schemaDir = filepath.Join("..", "..", "..", "..", "..", "contracts", "asyncapi", "schemas")
 
+// schemaBaseURL é o prefixo dos $id dos schemas. Os $ref relativos (envelope.v1.json) resolvem
+// contra ele; por isso todos os arquivos são registrados no compilador com esse id, sem rede.
+const schemaBaseURL = "https://people-platform.example.com/schemas/"
+
 func compileSchema(t *testing.T, file string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	c.AssertFormat()
-	abs, err := filepath.Abs(filepath.Join(schemaDir, file))
+	entries, err := os.ReadDir(schemaDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := c.Compile(abs)
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != ".json" {
+			continue
+		}
+		f, err := os.Open(filepath.Join(schemaDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc, err := jsonschema.UnmarshalJSON(f)
+		_ = f.Close()
+		if err != nil {
+			t.Fatalf("ler schema %s: %v", e.Name(), err)
+		}
+		if err := c.AddResource(schemaBaseURL+e.Name(), doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := c.Compile(schemaBaseURL + file)
 	if err != nil {
 		t.Fatalf("compilar schema %s: %v", file, err)
 	}

@@ -1,0 +1,522 @@
+{
+  "$schema": "https://www.krakend.io/schema/krakend.json",
+  "version": 3,
+  "name": "people-platform-gateway",
+  "port": 8080,
+  "timeout": "5s",
+  "cache_ttl": "0s",
+  "extra_config": {
+    "router": {
+      "return_error_msg": false,
+      "logger_skip_paths": [
+        "/__health"
+      ]
+    },
+    "telemetry/logging": {
+      "level": "INFO",
+      "prefix": "[GATEWAY]",
+      "stdout": true,
+      "format": "logstash"
+    },
+    "telemetry/opentelemetry": {
+      "service_name": "gateway",
+      "metric_reporting_period": 10,
+      "exporters": {
+        "otlp": [
+          {
+            "name": "collector",
+            "host": "otel-collector",
+            "port": 4317,
+            "use_http": false
+          }
+        ]
+      },
+      "layers": {
+        "global": {
+          "report_headers": false
+        },
+        "proxy": {
+          "report_headers": false
+        },
+        "backend": {
+          "metrics": {
+            "disable_stage": false
+          },
+          "traces": {
+            "disable_stage": false
+          }
+        }
+      }
+    },
+    "security/cors": {
+      "allow_origins": [
+        "http://localhost:5173"
+      ],
+      "allow_methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "allow_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "max_age": "12h"
+    }
+  },
+  "endpoints": [
+    {
+      "endpoint": "/tenant/v1/plans",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/plans",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 50,
+          "client_max_rate": 10,
+          "strategy": "ip"
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/branding",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "X-Forwarded-Host"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/branding",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "qos/ratelimit/router": {
+          "max_rate": 50,
+          "client_max_rate": 10,
+          "strategy": "ip"
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/me/tenant",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/me/tenant",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants",
+      "method": "POST",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants",
+          "encoding": "no-op",
+          "method": "POST"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}",
+      "method": "PATCH",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}",
+          "encoding": "no-op",
+          "method": "PATCH"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}",
+      "method": "DELETE",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}",
+          "encoding": "no-op",
+          "method": "DELETE"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/features",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/features",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/features/{feature}",
+      "method": "PUT",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/features/{feature}",
+          "encoding": "no-op",
+          "method": "PUT"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/theme",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/theme",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/theme",
+      "method": "PUT",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/theme",
+          "encoding": "no-op",
+          "method": "PUT"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/theme/logo-upload",
+      "method": "POST",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/theme/logo-upload",
+          "encoding": "no-op",
+          "method": "POST"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/domains",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/domains",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/tenant/v1/tenants/{id}/domains",
+      "method": "POST",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://tenant-service:8080"
+          ],
+          "url_pattern": "/v1/tenants/{id}/domains",
+          "encoding": "no-op",
+          "method": "POST"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    }
+  ]
+}

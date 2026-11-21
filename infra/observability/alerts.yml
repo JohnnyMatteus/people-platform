@@ -1,0 +1,21 @@
+groups:
+  - name: people-platform
+    rules:
+      - alert: OutboxPublishFailing
+        expr: increase(outbox_publish_failures_total[5m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Relay da outbox de {{ $labels.service }} falhando há 5 minutos"
+          description: "Eventos estão acumulando na outbox; verifique o Kafka e last_error na tabela outbox."
+      - alert: HighErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+            / sum by (service) (rate(http_requests_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mais de 5% de respostas 5xx em {{ $labels.service }}"
+          description: "Taxa de erro acima do SLO por 10 minutos."

@@ -2,10 +2,14 @@
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
+COPY cmd ./cmd
+COPY internal ./internal
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/tenant-service ./cmd/tenant-service
+# go build baixa só os módulos que o binário importa (não as dependências de teste);
+# os cache mounts reaproveitam módulos e compilação entre builds.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/tenant-service ./cmd/tenant-service
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/tenant-service /tenant-service

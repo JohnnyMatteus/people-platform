@@ -1,4 +1,5 @@
-// Comando tenant-service: "serve" sobe a API e o relay da outbox; "migrate" aplica o esquema.
+// Comando tenant-service: "serve" sobe a API e o relay da outbox; "migrate" aplica o esquema;
+// "healthcheck" consulta o /healthz local (a imagem distroless não tem curl nem shell).
 package main
 
 import (
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -46,8 +48,10 @@ func main() {
 		err = serve(ctx, logger)
 	case "migrate":
 		err = migrate(ctx)
+	case "healthcheck":
+		err = healthcheck(ctx)
 	default:
-		err = fmt.Errorf("comando desconhecido %q (use serve ou migrate)", cmd)
+		err = fmt.Errorf("comando desconhecido %q (use serve, migrate ou healthcheck)", cmd)
 	}
 	if err != nil {
 		logger.Error("encerrando com erro", slog.String("error", err.Error()))
@@ -66,6 +70,31 @@ func migrate(ctx context.Context) error {
 	}
 	defer pool.Close()
 	return postgres.Migrate(ctx, pool)
+}
+
+func healthcheck(ctx context.Context) error {
+	addr := os.Getenv("HTTP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/healthz", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthz respondeu %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func serve(ctx context.Context, logger *slog.Logger) error {

@@ -1,0 +1,10 @@
+# Override opcional: anexa o gateway à rede externa compartilhada `portfolio-net`, para outros
+# projetos do ecossistema (ex.: um gateway de borda ou um copiloto de operações) enxergarem a
+# plataforma. Crie a rede com `make network` e suba com `make up PORTFOLIO=1`.
+services:
+  gateway:
+    networks: [people-platform-net, portfolio-net]
+
+networks:
+  portfolio-net:
+    external: true

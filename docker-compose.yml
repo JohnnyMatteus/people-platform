@@ -3,6 +3,7 @@
 #   observability   OpenTelemetry Collector, Prometheus, Grafana, Jaeger
 #   tools           Kafka UI, Adminer
 #   tenant-service  o serviço Go e o job de migração dele
+#   recruitment-service  o ATS (PHP + Laravel), o job de migração e o relay da outbox
 # Uso: make up (core), make up-all (core + observability + tools + serviços). Senhas são só de dev.
 name: people-platform
 
@@ -223,6 +224,73 @@ services:
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "/tenant-service", "healthcheck"]
+    networks: [people-platform-net]
+
+  # ------------------------------------------------- recruitment-service
+  recruitment-service-migrate:
+    build:
+      context: ./services/recruitment-service
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "migrate", "--database=migrate", "--force"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &recruitment-env
+      APP_KEY: ${RECRUITMENT_APP_KEY:-base64:yXBDhbE0qFhUakEUjRuJ0a7s28s3EKZZaIEmdsOQgPY=}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: recruitment_service
+      DB_USERNAME: recruitment_service_app
+      DB_PASSWORD: ${RECRUITMENT_DB_APP_PASSWORD:-dev-only-change-me}
+      DB_MIGRATION_USERNAME: recruitment_service_owner
+      DB_MIGRATION_PASSWORD: ${RECRUITMENT_DB_OWNER_PASSWORD:-dev-only-change-me}
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      S3_RESUMES_BUCKET: ${S3_RESUMES_BUCKET:-people-platform-recruitment-resumes}
+      S3_PRESIGN_ENDPOINT: http://localhost:${LOCALSTACK_PORT:-4566}
+      KAFKA_BROKERS: kafka:9092
+      CACHE_STORE: file
+      SESSION_DRIVER: array
+      LOG_CHANNEL: stderr
+    restart: "no"
+    networks: [people-platform-net]
+
+  recruitment-service:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    environment: *recruitment-env
+    ports:
+      - "${RECRUITMENT_SERVICE_PORT:-8082}:8080"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/up') === false ? 1 : 0);"]
+    networks: [people-platform-net]
+
+  # Publica a outbox no Kafka (CandidatoContratado em people.recruitment.events.v1).
+  recruitment-service-relay:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "outbox:relay"]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment: *recruitment-env
+    restart: unless-stopped
     networks: [people-platform-net]
 
   # -------------------------------------------------------- observability

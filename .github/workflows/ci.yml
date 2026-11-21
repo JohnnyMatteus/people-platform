@@ -23,6 +23,7 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       tenant-service: ${{ steps.filter.outputs.tenant-service }}
       performance-service: ${{ steps.filter.outputs.performance-service }}
+      recruitment-service: ${{ steps.filter.outputs.recruitment-service }}
       platform: ${{ steps.filter.outputs.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +41,10 @@ jobs:
               - '.github/workflows/ci.yml'
             performance-service:
               - 'services/performance-service/**'
+              - '.github/workflows/ci.yml'
+            recruitment-service:
+              - 'services/recruitment-service/**'
+              - 'contracts/asyncapi/schemas/**'
               - '.github/workflows/ci.yml'
             platform:
               - 'docker-compose*.yml'
@@ -100,6 +105,60 @@ jobs:
       - name: Lint, testes e build (ktlint + JUnit)
         run: gradle --no-daemon --console=plain ktlintCheck test build
 
+  recruitment-service:
+    needs: changes
+    if: needs.changes.outputs.recruitment-service == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: services/recruitment-service
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, pdo_sqlite, sodium
+          coverage: none
+          tools: composer:v2
+      - name: Dependências
+        run: composer install --no-interaction --prefer-dist
+      - name: Lint (Pint)
+        run: make lint
+      - name: Testes unitários e de API (SQLite em memória)
+        run: make test-unit
+      - name: Banco como no compose (dono, papel da aplicação sem BYPASSRLS)
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE recruitment_service_owner LOGIN PASSWORD 'ci';
+          CREATE DATABASE recruitment_service OWNER recruitment_service_owner;
+          CREATE ROLE recruitment_app NOLOGIN;
+          CREATE ROLE recruitment_service_app LOGIN PASSWORD 'ci' IN ROLE recruitment_app;
+          SQL
+          psql -h localhost -U postgres -d recruitment_service -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO recruitment_service_owner; REVOKE ALL ON SCHEMA public FROM PUBLIC;"
+      - name: Vazamento entre tenants (Postgres real com RLS)
+        env:
+          RECRUITMENT_PG_TESTS: "1"
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: recruitment_service
+          DB_USERNAME: recruitment_service_app
+          DB_PASSWORD: ci
+          DB_MIGRATION_USERNAME: recruitment_service_owner
+          DB_MIGRATION_PASSWORD: ci
+        run: php artisan test --testsuite=Integration
+      - name: Imagem Docker
+        run: docker build -t people-platform/recruitment-service:ci .
+
   platform:
     needs: changes
     if: needs.changes.outputs.platform == 'true'
@@ -107,7 +166,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido

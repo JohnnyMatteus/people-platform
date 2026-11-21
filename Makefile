@@ -10,7 +10,7 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
 GRADLE         := docker run --rm -v "$(CURDIR)/services/performance-service":/home/gradle/project \
@@ -91,3 +91,14 @@ performance-service-test: ## Testes JUnit do núcleo de domínio (via Docker)
 
 performance-service-build: ## Compila e empacota o núcleo (via Docker)
 	$(GRADLE) build
+
+# -------------------------------------------------------- recruitment-service
+.PHONY: recruitment-service-lint recruitment-service-test recruitment-service-up
+recruitment-service-lint: ## Pint (exige PHP 8.3+ e composer install no serviço)
+	$(MAKE) -C services/recruitment-service lint
+
+recruitment-service-test: ## Testes unitários e de API do recruitment-service (SQLite; a suíte Integration roda no CI)
+	$(MAKE) -C services/recruitment-service test-unit
+
+recruitment-service-up: ## Sobe o núcleo e o recruitment-service (migração e relay inclusos)
+	$(COMPOSE) $(PROFILES_CORE) --profile recruitment-service up -d --build --wait

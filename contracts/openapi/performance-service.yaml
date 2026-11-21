@@ -1,0 +1,498 @@
+openapi: 3.1.0
+info:
+  title: People Platform - performance-service
+  version: 0.1.0
+  summary: Avaliações, calibração, nine box, sucessão, OKRs e PDI.
+  description: |
+    Contrato-alvo do performance-service. Nesta rodada só o núcleo de domínio (Kotlin puro) está
+    implementado; a camada HTTP (Spring Boot) segue este contrato na próxima rodada (ADR 0011).
+    O tenant vem sempre da claim `tenant_id` do token, nunca de parâmetro.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+servers:
+  - url: http://localhost:8000/performance
+    description: Gateway local (KrakenD)
+security:
+  - bearerAuth: []
+tags:
+  - name: nine-box
+    description: Política, classificação e calibração da matriz desempenho × potencial.
+  - name: succession
+    description: Posições críticas e mapas de sucessão.
+  - name: cycles
+    description: Ciclos de avaliação (esboço).
+paths:
+  /v1/nine-box/policy:
+    get:
+      tags: [nine-box]
+      operationId: getNineBoxPolicy
+      summary: Política de nine box do tenant (escala, limiares e regras de calibração).
+      responses:
+        "200":
+          description: Política vigente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NineBoxPolicy"
+        "401":
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [nine-box]
+      operationId: setNineBoxPolicy
+      summary: Define a política (admin do tenant). Vale para sessões abertas depois da mudança.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NineBoxPolicy"
+      responses:
+        "200":
+          description: Política gravada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NineBoxPolicy"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/cycles/{cycleId}/calibration-sessions:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    post:
+      tags: [nine-box]
+      operationId: openCalibrationSession
+      summary: Abre a sessão de calibração do ciclo com as avaliações consolidadas.
+      responses:
+        "201":
+          description: Sessão aberta com as posições calculadas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationSession"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /v1/calibration-sessions/{sessionId}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      tags: [nine-box]
+      operationId: getCalibrationSession
+      summary: Estado da sessão, distribuição por quadrante e alertas.
+      responses:
+        "200":
+          description: Sessão.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationSession"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/calibration-sessions/{sessionId}/adjustments:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    post:
+      tags: [nine-box]
+      operationId: adjustPlacement
+      summary: Move uma pessoa de quadrante, com justificativa e dentro do limite de faixas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employee_id, to, justification]
+              properties:
+                employee_id:
+                  type: string
+                  format: uuid
+                to:
+                  $ref: "#/components/schemas/Quadrant"
+                justification:
+                  type: string
+                  minLength: 20
+      responses:
+        "201":
+          description: Ajuste registrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Adjustment"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/calibration-sessions/{sessionId}/close:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    post:
+      tags: [nine-box]
+      operationId: closeCalibrationSession
+      summary: Fecha a sessão e publica NineBoxCalibrado para cada pessoa.
+      responses:
+        "200":
+          description: Resultado final.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationSession"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /v1/employees/{employeeId}/nine-box-history:
+    parameters:
+      - name: employeeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [nine-box]
+      operationId: getNineBoxHistory
+      summary: Histórico por ciclo e tendência (gestor da pessoa, RH ou a própria pessoa).
+      responses:
+        "200":
+          description: Histórico.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, trend]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required: [cycle_id, quadrant, calibrated, closed_at]
+                      properties:
+                        cycle_id:
+                          type: string
+                          format: uuid
+                        quadrant:
+                          $ref: "#/components/schemas/Quadrant"
+                        calibrated:
+                          type: boolean
+                        closed_at:
+                          type: string
+                          format: date-time
+                  trend:
+                    type: string
+                    enum: [UP, DOWN, STABLE, LATERAL, INSUFFICIENT_DATA]
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/critical-positions:
+    get:
+      tags: [succession]
+      operationId: listCriticalPositions
+      summary: Lista posições críticas com a força do banco de sucessores.
+      responses:
+        "200":
+          description: Posições.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SuccessionPlan"
+    post:
+      tags: [succession]
+      operationId: createCriticalPosition
+      summary: Cadastra uma posição crítica.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title]
+              properties:
+                title:
+                  type: string
+                incumbent_id:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Posição criada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessionPlan"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/critical-positions/{positionId}/successors:
+    parameters:
+      - name: positionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [succession]
+      operationId: nominateSuccessor
+      summary: Indica um sucessor com prontidão.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employee_id, readiness]
+              properties:
+                employee_id:
+                  type: string
+                  format: uuid
+                readiness:
+                  $ref: "#/components/schemas/Readiness"
+      responses:
+        "201":
+          description: Mapa atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessionPlan"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/critical-positions/{positionId}/successors/{employeeId}/readiness-suggestion:
+    parameters:
+      - name: positionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: employeeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [succession]
+      operationId: suggestReadiness
+      summary: Sugestão de prontidão a partir do último nine box e do tempo na função.
+      responses:
+        "200":
+          description: Sugestão (null quando o potencial é baixo).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestion]
+                properties:
+                  suggestion:
+                    oneOf:
+                      - $ref: "#/components/schemas/Readiness"
+                      - type: "null"
+  /v1/cycles:
+    get:
+      tags: [cycles]
+      operationId: listCycles
+      summary: Esboço - lista ciclos de avaliação (auto, gestor, pares, 180/360).
+      responses:
+        "200":
+          description: Ciclos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    type:
+                      type: string
+                      enum: [self, manager, peers, "180", "360"]
+                    status:
+                      type: string
+                      enum: [draft, open, consolidating, calibration, closed]
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CycleId:
+      name: cycleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Problem:
+      description: Erro no formato RFC 9457.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status]
+            properties:
+              type:
+                type: string
+              title:
+                type: string
+              status:
+                type: integer
+              detail:
+                type: string
+  schemas:
+    Quadrant:
+      type: string
+      enum: [Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9]
+      description: Q1 = baixo/baixo ... Q9 = alto desempenho e alto potencial.
+    Readiness:
+      type: string
+      enum: [READY_NOW, ONE_TO_TWO_YEARS, THREE_PLUS_YEARS]
+    AxisThresholds:
+      type: object
+      required: [medium_from, high_from]
+      properties:
+        medium_from:
+          type: string
+          description: Decimal em string para não perder precisão.
+          examples: ["2.5"]
+        high_from:
+          type: string
+          examples: ["3.75"]
+    NineBoxPolicy:
+      type: object
+      required: [scale_min, scale_max, performance, potential]
+      properties:
+        scale_min:
+          type: string
+          examples: ["1"]
+        scale_max:
+          type: string
+          examples: ["5"]
+        performance:
+          $ref: "#/components/schemas/AxisThresholds"
+        potential:
+          $ref: "#/components/schemas/AxisThresholds"
+        max_steps_per_axis:
+          type: integer
+          minimum: 1
+          maximum: 2
+          default: 1
+        top_box_warning_share:
+          type: string
+          default: "0.20"
+        min_justification_length:
+          type: integer
+          minimum: 0
+          default: 20
+    Adjustment:
+      type: object
+      required: [employee_id, from, to, calibrated_by, justification, at]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        from:
+          $ref: "#/components/schemas/Quadrant"
+        to:
+          $ref: "#/components/schemas/Quadrant"
+        calibrated_by:
+          type: string
+          format: uuid
+        justification:
+          type: string
+        at:
+          type: string
+          format: date-time
+    CalibrationSession:
+      type: object
+      required: [id, cycle_id, status, placements, distribution, warnings, adjustments]
+      properties:
+        id:
+          type: string
+          format: uuid
+        cycle_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [open, closed]
+        placements:
+          type: array
+          items:
+            type: object
+            required: [employee_id, original, current]
+            properties:
+              employee_id:
+                type: string
+                format: uuid
+              original:
+                $ref: "#/components/schemas/Quadrant"
+              current:
+                $ref: "#/components/schemas/Quadrant"
+        distribution:
+          type: object
+          additionalProperties:
+            type: integer
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              code:
+                type: string
+                enum: [TOP_BOX_ABOVE_GUIDELINE]
+              share:
+                type: string
+              guideline:
+                type: string
+        adjustments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Adjustment"
+    SuccessionPlan:
+      type: object
+      required: [position_id, title, bench_strength, successors]
+      properties:
+        position_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        incumbent_id:
+          type: string
+          format: uuid
+        bench_strength:
+          type: string
+          enum: [NONE, WEAK, ADEQUATE, STRONG]
+        successors:
+          type: array
+          items:
+            type: object
+            required: [employee_id, readiness]
+            properties:
+              employee_id:
+                type: string
+                format: uuid
+              readiness:
+                $ref: "#/components/schemas/Readiness"

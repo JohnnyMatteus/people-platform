@@ -1,0 +1,29 @@
+name: Funcionalidade
+description: Proponha uma capacidade nova ou uma melhoria.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Módulo
+      options: [Tenants e white label, Recrutamento (ATS), Desempenho, Objetivos e metas, PDI, Engajamento, People analytics, Aprendizagem, IA, Plataforma]
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema de negócio
+      description: Quem sente a dor e em que situação.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Dados pessoais e LGPD
+      description: Que dados pessoais a funcionalidade usa, com qual base legal e por quanto tempo.

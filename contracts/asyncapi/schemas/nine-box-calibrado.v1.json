@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/nine-box-calibrado.v1.json",
+  "title": "NineBoxCalibrado v1",
+  "description": "Posição final de uma pessoa no nine box após o fechamento da sessão de calibração. Consumido pelo PDI e, sempre agregado, pelo analytics.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "NineBoxCalibrado" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "performance-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cycle_id", "employee_id", "quadrant", "calibrated"],
+      "properties": {
+        "cycle_id": { "type": "string", "format": "uuid" },
+        "employee_id": { "type": "string", "format": "uuid" },
+        "quadrant": { "type": "string", "enum": ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9"] },
+        "calibrated": { "type": "boolean" }
+      }
+    }
+  }
+}

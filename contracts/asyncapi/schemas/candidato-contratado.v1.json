@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/candidato-contratado.v1.json",
+  "title": "CandidatoContratado v1",
+  "description": "Uma candidatura chegou à etapa final. Dispara onboarding (trilha de aprendizagem) e entra no analytics de admissões. Não carrega currículo nem dados de contato: só o necessário para criar o colaborador.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "CandidatoContratado" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "recruitment-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "application_id", "position_title", "unit", "start_date"],
+      "properties": {
+        "job_id": { "type": "string", "format": "uuid" },
+        "application_id": { "type": "string", "format": "uuid" },
+        "position_title": { "type": "string" },
+        "unit": { "type": "string" },
+        "start_date": { "type": "string", "format": "date" }
+      }
+    }
+  }
+}

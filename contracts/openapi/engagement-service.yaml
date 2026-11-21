@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: People Platform - engagement-service
+  version: 0.0.1
+  summary: Feedback, elogios, 1:1, clima anônimo, gamificação e rede social.
+  description: |
+    Esboço de contrato. O serviço será construído numa próxima rodada; este arquivo fixa os
+    recursos principais e as convenções (bearer JWT com tenant_id, problem+json, paginação por cursor).
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+servers:
+  - url: http://localhost:8000/engagement
+    description: Gateway local (KrakenD)
+security:
+  - bearerAuth: []
+tags:
+  - name: engagement
+    description: Feedback, elogios, 1:1, clima anônimo, gamificação e rede social.
+paths:
+  /v1/feedbacks:
+    post:
+      tags: [engagement]
+      operationId: giveFeedback
+      summary: Feedback privado entre líder e liderado (visível só às duas partes).
+      responses:
+        "201":
+          description: Feedback registrado.
+  /v1/praises:
+    post:
+      tags: [engagement]
+      operationId: praise
+      summary: Elogio público no feed; gera pontos de gamificação.
+      responses:
+        "201":
+          description: Elogio publicado.
+  /v1/one-on-ones/{meetingId}/context:
+    parameters:
+      - name: meetingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [engagement]
+      operationId: oneOnOneContext
+      summary: Contexto automático da 1:1 (feedbacks recentes, metas, PDI), resumido por IA.
+      responses:
+        "200":
+          description: Contexto.
+  /v1/surveys/{surveyId}/responses:
+    parameters:
+      - name: surveyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [engagement]
+      operationId: answerSurvey
+      summary: Resposta anônima de clima (sem employee_id na resposta, ADR 0007).
+      responses:
+        "202":
+          description: Resposta aceita.
+  /v1/surveys/{surveyId}/results:
+    parameters:
+      - name: surveyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [engagement]
+      operationId: surveyResults
+      summary: Resultados agregados por segmento; segmentos com menos de k respostas são suprimidos.
+      responses:
+        "200":
+          description: Resultados agregados.
+  /v1/posts/{postId}/read-receipts:
+    parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [engagement]
+      operationId: confirmRead
+      summary: Confirmação de leitura de um comunicado da rede social corporativa.
+      responses:
+        "204":
+          description: Leitura confirmada.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

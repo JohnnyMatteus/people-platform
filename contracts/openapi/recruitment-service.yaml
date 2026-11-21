@@ -1,0 +1,142 @@
+openapi: 3.1.0
+info:
+  title: People Platform - recruitment-service (ATS)
+  version: 0.0.1
+  summary: Vagas, candidatos, pipeline por etapas, entrevistas e scorecards.
+  description: |
+    Esboço de contrato. O serviço será construído numa próxima rodada; este arquivo fixa os
+    recursos principais e as convenções (bearer JWT com tenant_id, problem+json, paginação por cursor).
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+servers:
+  - url: http://localhost:8000/recruitment
+    description: Gateway local (KrakenD)
+security:
+  - bearerAuth: []
+tags:
+  - name: recruitment
+    description: Vagas, candidatos, pipeline por etapas, entrevistas e scorecards.
+paths:
+  /v1/jobs:
+    get:
+      tags: [recruitment]
+      operationId: listJobs
+      summary: Lista vagas do tenant (paginação por cursor).
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de vagas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Job"
+                  next_cursor:
+                    type: string
+    post:
+      tags: [recruitment]
+      operationId: openJob
+      summary: Abre uma vaga com as etapas do pipeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Job"
+      responses:
+        "201":
+          description: Vaga aberta.
+  /v1/jobs/{jobId}/applications:
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [recruitment]
+      operationId: apply
+      summary: Registra candidatura; o currículo vai ao S3 por URL pré-assinada.
+      responses:
+        "201":
+          description: Candidatura criada com URL de upload do currículo.
+  /v1/applications/{applicationId}/stage:
+    parameters:
+      - name: applicationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      tags: [recruitment]
+      operationId: moveStage
+      summary: Move a candidatura de etapa; a etapa final "contratado" publica CandidatoContratado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage:
+                  type: string
+      responses:
+        "200":
+          description: Etapa alterada.
+  /v1/interviews/{interviewId}/scorecards:
+    parameters:
+      - name: interviewId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [recruitment]
+      operationId: submitScorecard
+      summary: Envia o scorecard estruturado de uma entrevista.
+      responses:
+        "201":
+          description: Scorecard registrado.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+  schemas:
+    Job:
+      type: object
+      required: [title, stages]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        unit:
+          type: string
+        stages:
+          type: array
+          items:
+            type: string
+          examples: [[triagem, entrevista-rh, entrevista-gestor, proposta, contratado]]

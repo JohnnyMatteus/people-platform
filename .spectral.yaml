@@ -1,0 +1,23 @@
+# Validação de contratos (OpenAPI e AsyncAPI), rodada no CI e em `make contracts-lint`.
+extends:
+  - spectral:oas
+  - spectral:asyncapi
+rules:
+  # Exigimos `summary` curto em toda operação (regra abaixo); `description` só quando há algo
+  # além do resumo a dizer, para o contrato não virar texto repetido.
+  operation-description: off
+  operation-summary-required:
+    description: Toda operação precisa de summary.
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete]"
+    then:
+      field: summary
+      function: truthy
+  # Todo schema de evento precisa declarar tenant_id (ADR 0002).
+  event-payload-has-tenant:
+    description: Todo payload de mensagem AsyncAPI precisa referenciar o envelope com tenant_id.
+    severity: error
+    given: "$.components.messages[*]"
+    then:
+      field: payload
+      function: truthy

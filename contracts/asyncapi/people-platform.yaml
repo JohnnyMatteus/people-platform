@@ -1,0 +1,246 @@
+asyncapi: 3.0.0
+info:
+  title: People Platform - eventos de domínio
+  version: 1.0.0
+  description: |
+    Contratos dos eventos trocados entre os contextos via Kafka (ADR 0005).
+    Todos os eventos usam o envelope `schemas/envelope.v1.json`, com `tenant_id` obrigatório;
+    a chave da mensagem é o `tenant_id`, o que garante ordem por tenant. Entrega at-least-once:
+    consumidores deduplicam por `event_id`. Mudanças incompatíveis geram `event_version` e tópico novos.
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+    email: contato@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  tags:
+    - name: tenant
+    - name: performance
+    - name: recruitment
+    - name: engagement
+defaultContentType: application/json
+servers:
+  local:
+    host: localhost:9094
+    protocol: kafka
+    description: Kafka KRaft do docker-compose (listener externo).
+channels:
+  tenantEvents:
+    address: people.tenant.events.v1
+    description: "Eventos do contexto de tenants (produtor: tenant-service)."
+    messages:
+      TenantCriado:
+        $ref: '#/components/messages/TenantCriado'
+      TenantPlanoAlterado:
+        $ref: '#/components/messages/TenantPlanoAlterado'
+  performanceEvents:
+    address: people.performance.events.v1
+    description: "Eventos de desempenho (produtor: performance-service)."
+    messages:
+      AvaliacaoConcluida:
+        $ref: '#/components/messages/AvaliacaoConcluida'
+      NineBoxCalibrado:
+        $ref: '#/components/messages/NineBoxCalibrado'
+  recruitmentEvents:
+    address: people.recruitment.events.v1
+    description: "Eventos do ATS (produtor: recruitment-service)."
+    messages:
+      CandidatoContratado:
+        $ref: '#/components/messages/CandidatoContratado'
+  engagementEvents:
+    address: people.engagement.events.v1
+    description: "Eventos de engajamento (produtor: engagement-service)."
+    messages:
+      ElogioPublicado:
+        $ref: '#/components/messages/ElogioPublicado'
+      PesquisaClimaEncerrada:
+        $ref: '#/components/messages/PesquisaClimaEncerrada'
+operations:
+  publishTenantEvents:
+    action: send
+    description: "Publicado por tenant-service via transactional outbox."
+    channel:
+      $ref: '#/channels/tenantEvents'
+    messages:
+      - $ref: '#/channels/tenantEvents/messages/TenantCriado'
+      - $ref: '#/channels/tenantEvents/messages/TenantPlanoAlterado'
+  publishPerformanceEvents:
+    action: send
+    description: "Publicado por performance-service via transactional outbox."
+    channel:
+      $ref: '#/channels/performanceEvents'
+    messages:
+      - $ref: '#/channels/performanceEvents/messages/AvaliacaoConcluida'
+      - $ref: '#/channels/performanceEvents/messages/NineBoxCalibrado'
+  publishRecruitmentEvents:
+    action: send
+    description: "Publicado por recruitment-service via transactional outbox."
+    channel:
+      $ref: '#/channels/recruitmentEvents'
+    messages:
+      - $ref: '#/channels/recruitmentEvents/messages/CandidatoContratado'
+  publishEngagementEvents:
+    action: send
+    description: "Publicado por engagement-service via transactional outbox."
+    channel:
+      $ref: '#/channels/engagementEvents'
+    messages:
+      - $ref: '#/channels/engagementEvents/messages/ElogioPublicado'
+      - $ref: '#/channels/engagementEvents/messages/PesquisaClimaEncerrada'
+  provisionTenantOnCreated:
+    action: receive
+    description: "Todos os serviços consomem para provisionar o tenant e ligar/desligar módulos conforme as features."
+    channel:
+      $ref: '#/channels/tenantEvents'
+    messages:
+      - $ref: '#/channels/tenantEvents/messages/TenantCriado'
+      - $ref: '#/channels/tenantEvents/messages/TenantPlanoAlterado'
+  feedCalibrationAndIdp:
+    action: receive
+    description: "performance-service (sessão de calibração e PDI) e analytics-ai-service (agregados e sugestões de PDI)."
+    channel:
+      $ref: '#/channels/performanceEvents'
+    messages:
+      - $ref: '#/channels/performanceEvents/messages/AvaliacaoConcluida'
+      - $ref: '#/channels/performanceEvents/messages/NineBoxCalibrado'
+  startOnboardingOnHire:
+    action: receive
+    description: "learning-service (trilha de onboarding) e analytics-ai-service (admissões)."
+    channel:
+      $ref: '#/channels/recruitmentEvents'
+    messages:
+      - $ref: '#/channels/recruitmentEvents/messages/CandidatoContratado'
+  awardPointsAndBuildContext:
+    action: receive
+    description: "engagement-service (gamificação) e contexto de 1:1."
+    channel:
+      $ref: '#/channels/engagementEvents'
+    messages:
+      - $ref: '#/channels/engagementEvents/messages/ElogioPublicado'
+  draftClimateActionPlan:
+    action: receive
+    description: "analytics-ai-service gera a proposta de plano de ação a partir dos agregados."
+    channel:
+      $ref: '#/channels/engagementEvents'
+    messages:
+      - $ref: '#/channels/engagementEvents/messages/PesquisaClimaEncerrada'
+components:
+  messages:
+    TenantCriado:
+      name: TenantCriado
+      title: Tenant criado
+      summary: Tenant criado.
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/tenant-criado.v1.json'
+    TenantPlanoAlterado:
+      name: TenantPlanoAlterado
+      title: Plano do tenant alterado
+      summary: Plano do tenant alterado.
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/tenant-plano-alterado.v1.json'
+    AvaliacaoConcluida:
+      name: AvaliacaoConcluida
+      title: Avaliação consolidada concluída
+      summary: Avaliação consolidada concluída.
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/avaliacao-concluida.v1.json'
+    NineBoxCalibrado:
+      name: NineBoxCalibrado
+      title: Posição final no nine box
+      summary: Posição final no nine box.
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/nine-box-calibrado.v1.json'
+    CandidatoContratado:
+      name: CandidatoContratado
+      title: Candidato contratado
+      summary: Candidato contratado.
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/candidato-contratado.v1.json'
+    ElogioPublicado:
+      name: ElogioPublicado
+      title: Elogio publicado
+      summary: Elogio publicado.
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/elogio-publicado.v1.json'
+    PesquisaClimaEncerrada:
+      name: PesquisaClimaEncerrada
+      title: Pesquisa de clima encerrada (só agregados)
+      summary: Pesquisa de clima encerrada (só agregados).
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/pesquisa-clima-encerrada.v1.json'
+  schemas:
+    KafkaHeaders:
+      type: object
+      required: [event_type, event_version]
+      properties:
+        event_type:
+          type: string
+        event_version:
+          type: string
+        traceparent:
+          type: string
+          description: Contexto W3C Trace Context do request que originou o evento.

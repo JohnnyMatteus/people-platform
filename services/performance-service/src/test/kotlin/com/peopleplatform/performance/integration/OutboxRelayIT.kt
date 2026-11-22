@@ -9,6 +9,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.Message
 import org.springframework.test.web.servlet.MockMvc
 import java.time.Clock
@@ -95,6 +96,7 @@ class OutboxRelayIT : IntegrationTestBase() {
     private fun selectiveKafka(
         reject: Set<UUID>,
         delivered: MutableList<UUID>,
+        keys: MutableList<String> = mutableListOf(),
     ): KafkaTemplate<String, String> {
         val template = Mockito.mock(KafkaTemplate::class.java) as KafkaTemplate<String, String>
         Mockito.doAnswer { call ->
@@ -104,6 +106,7 @@ class OutboxRelayIT : IntegrationTestBase() {
                 CompletableFuture.failedFuture<Any?>(IllegalStateException("recusada pelo broker"))
             } else {
                 delivered += id
+                keys += call.getArgument<Message<*>>(0).headers[KafkaHeaders.KEY].toString()
                 CompletableFuture.completedFuture<Any?>(null)
             }
         }.`when`(template).send(ArgumentMatchers.any<Message<*>>())
@@ -126,10 +129,13 @@ class OutboxRelayIT : IntegrationTestBase() {
         val b = seed(tenantB, 4, start.plusSeconds(60))
         val reject = mutableSetOf(a[1], b[2])
         val delivered = mutableListOf<UUID>()
-        val relay = OutboxRelay(scope, outbox, selectiveKafka(reject, delivered), Clock.systemUTC(), "t")
+        val keys = mutableListOf<String>()
+        val relay = OutboxRelay(scope, outbox, selectiveKafka(reject, delivered, keys), Clock.systemUTC(), "t")
 
         assertEquals(3, relay.relayOnce(batch = 5))
         assertEquals(listOf(a[0], b[0], b[1]), delivered)
+        // ADR 0005: a chave é o tenant_id, que é o que dá a ordem por tenant na partição.
+        assertEquals(listOf(tenantA, tenantB, tenantB).map { it.toString() }, keys)
 
         val rows = scope.runAsPlatform { outbox.findAllById(a + b).associateBy { it.id } }
         (a + b).forEach { assertEquals(if (it in reject) 1 else 0, rows.getValue(it).attempts) }

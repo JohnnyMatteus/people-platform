@@ -4,6 +4,7 @@ import type { PointEntry, PointReason } from '../../src/domain/gamification';
 import type { OneOnOne } from '../../src/domain/one-on-one';
 import type { Feedback, Post, Praise } from '../../src/domain/social';
 import type { Survey, SurveyResponse } from '../../src/domain/survey';
+import type { TenantSettings } from '../../src/domain/tenant-settings';
 
 interface Ledger extends PointEntry {
   tenantId: string;
@@ -24,6 +25,8 @@ export class MemoryStore implements Store {
   posts: Post[] = [];
   receipts: { tenantId: string; postId: string; employeeId: string; readAt: Date }[] = [];
   outbox: OutboxEvent[] = [];
+  settings: TenantSettings[] = [];
+  processed: { tenantId: string; eventId: string }[] = [];
 
   async inTenant<T>(t: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
     const mine = <R extends { tenantId: string }>(rows: R[]) => rows.filter((r) => r.tenantId === t);
@@ -104,6 +107,17 @@ export class MemoryStore implements Store {
         readBy: async (e, ids) => new Set(mine(s.receipts).filter((r) => r.employeeId === e && ids.includes(r.postId)).map((r) => r.postId)),
       },
       outbox: { add: async (e) => void s.outbox.push(e) },
+      settings: {
+        get: async () => mine(s.settings)[0] ?? null,
+        upsert: async (x) => void (s.settings = [...s.settings.filter((y) => y.tenantId !== t), x]),
+      },
+      processedEvents: {
+        claim: async (eventId) => {
+          if (mine(s.processed).some((p) => p.eventId === eventId)) return false;
+          s.processed.push({ tenantId: t, eventId });
+          return true;
+        },
+      },
     };
     return fn(tx);
   }

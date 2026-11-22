@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { Kafka, logLevel } from 'kafkajs';
 import type { GamificationService, ElogioPublicadoEnvelope } from '../../app/gamification-service';
+import type { TenantProvisioningService } from '../../app/tenant-provisioning-service';
 import { TOPIC_ENGAGEMENT_EVENTS } from '../../domain/events';
+import { TOPIC_TENANT_EVENTS, type TenantCriadoEnvelope } from '../../domain/tenant-settings';
 import type { EventPublisher } from '../postgres/outbox-relay';
 
 export const newKafka = (brokers: string[]) => new Kafka({ clientId: 'engagement-service', brokers, logLevel: logLevel.WARN });
@@ -54,6 +56,47 @@ export class GamificationConsumer {
       },
     });
     this.log.log('consumidor de gamificação ativo');
+  }
+
+  stop() {
+    return this.consumer.disconnect();
+  }
+}
+
+/** Lê TenantCriado do tenant-service e prepara as configurações do tenant. */
+export class TenantEventsConsumer {
+  private readonly log = new Logger(TenantEventsConsumer.name);
+  private readonly consumer;
+
+  constructor(
+    kafka: Kafka,
+    private readonly provisioning: TenantProvisioningService,
+  ) {
+    this.consumer = kafka.consumer({ groupId: 'engagement-tenant-provisioning' });
+  }
+
+  async start() {
+    await this.consumer.connect();
+    await this.consumer.subscribe({ topic: TOPIC_TENANT_EVENTS, fromBeginning: true });
+    await this.consumer.run({
+      eachMessage: async ({ message }) => {
+        let env: TenantCriadoEnvelope;
+        try {
+          env = JSON.parse(message.value?.toString() ?? '{}') as TenantCriadoEnvelope;
+        } catch {
+          this.log.warn('mensagem de tenant com JSON inválido descartada');
+          return;
+        }
+        if (env.event_type !== 'TenantCriado' || env.event_version !== 1) return;
+        if (!Array.isArray(env.data?.features) || !env.data.slug || !env.tenant_id) {
+          this.log.warn('TenantCriado fora do contrato descartado');
+          return;
+        }
+        // Se lançar, o kafkajs reentrega; o claim por event_id torna o reprocessamento seguro.
+        await this.provisioning.onTenantCreated(env);
+      },
+    });
+    this.log.log('consumidor de TenantCriado ativo');
   }
 
   stop() {

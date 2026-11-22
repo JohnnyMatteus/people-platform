@@ -5,7 +5,8 @@ import { NestFactory } from '@nestjs/core';
 import { Pool } from 'pg';
 import { GamificationService } from './app/gamification-service';
 import { AppModule } from './app.module';
-import { GamificationConsumer, KafkaPublisher, newKafka } from './adapters/kafka/kafka';
+import { TenantProvisioningService } from './app/tenant-provisioning-service';
+import { GamificationConsumer, KafkaPublisher, newKafka, TenantEventsConsumer } from './adapters/kafka/kafka';
 import { OutboxRelay } from './adapters/postgres/outbox-relay';
 import { PostgresStore } from './adapters/postgres/store';
 import { TokenVerifier } from './platform/auth';
@@ -28,12 +29,15 @@ async function bootstrap() {
   const publisher = new KafkaPublisher(kafka);
   const relay = new OutboxRelay(store, publisher);
   const consumer = new GamificationConsumer(kafka, new GamificationService(deps));
+  const tenantConsumer = new TenantEventsConsumer(kafka, new TenantProvisioningService(deps));
   relay.start(cfg.OUTBOX_INTERVAL_MS);
   consumer.start().catch((e) => Logger.error(`consumidor de gamificação falhou: ${String(e)}`, 'kafka'));
 
+  tenantConsumer.start().catch((e) => Logger.error(`consumidor de TenantCriado falhou: ${String(e)}`, 'kafka'));
+
   const stop = async () => {
     relay.stop();
-    await Promise.allSettled([consumer.stop(), publisher.disconnect(), app.close()]);
+    await Promise.allSettled([consumer.stop(), tenantConsumer.stop(), publisher.disconnect(), app.close()]);
     await pool.end();
   };
   process.once('SIGTERM', () => void stop());

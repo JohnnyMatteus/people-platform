@@ -3,6 +3,7 @@ import type { PointEntry, PointReason } from '../domain/gamification';
 import type { OneOnOne } from '../domain/one-on-one';
 import type { Feedback, Post, Praise, ReadReceipt } from '../domain/social';
 import type { Survey, SurveyResponse } from '../domain/survey';
+import type { TenantSettings } from '../domain/tenant-settings';
 
 export interface FeedbackRepository {
   insert(f: Feedback): Promise<void>;
@@ -57,6 +58,16 @@ export interface PostRepository {
   readBy(employeeId: string, postIds: string[]): Promise<Set<string>>;
 }
 
+export interface TenantSettingsRepository {
+  get(): Promise<TenantSettings | null>;
+  upsert(s: TenantSettings, now: Date): Promise<void>;
+}
+
+export interface ProcessedEventRepository {
+  /** false se o evento já tinha sido consumido (deduplicação por event_id). */
+  claim(eventId: string, eventType: string, now: Date): Promise<boolean>;
+}
+
 export interface OutboxRepository {
   add(e: OutboxEvent): Promise<void>;
 }
@@ -70,6 +81,8 @@ export interface Tx {
   points: PointsRepository;
   posts: PostRepository;
   outbox: OutboxRepository;
+  settings: TenantSettingsRepository;
+  processedEvents: ProcessedEventRepository;
 }
 
 export interface Store {

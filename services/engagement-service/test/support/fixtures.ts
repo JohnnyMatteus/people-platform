@@ -14,3 +14,11 @@ export const principal = (employeeId: string, tenantId = TENANT_A, roles: string
 });
 
 export const depsFor = (store: Store, now = () => new Date('2026-11-21T12:00:00Z')): Deps => ({ store, now, newId: randomUUID });
+
+export const tenantCriado = (tenantId: string, features: string[], eventId: string = randomUUID()) => ({
+  event_id: eventId,
+  event_type: 'TenantCriado',
+  event_version: 1,
+  tenant_id: tenantId,
+  data: { slug: 'acme', name: 'Acme', plan: 'crescimento', features },
+});

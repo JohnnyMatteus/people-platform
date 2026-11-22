@@ -1,4 +1,6 @@
 // Roda com Postgres real via testcontainers (precisa de Docker); no CI, não localmente.
+import { TenantProvisioningService } from '../../src/app/tenant-provisioning-service';
+import { tenantCriado } from '../support/fixtures';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
@@ -47,12 +49,13 @@ const scoped = async <T>(tenant: string | null, fn: (c: import('pg').PoolClient)
   }
 };
 
-const TABLES = ['feedbacks', 'praises', 'one_on_ones', 'surveys', 'survey_participation', 'survey_response', 'points_ledger', 'badges', 'posts', 'read_receipts', 'outbox'];
+const TABLES = ['feedbacks', 'praises', 'one_on_ones', 'surveys', 'survey_participation', 'survey_response', 'points_ledger', 'badges', 'posts', 'read_receipts', 'outbox', 'tenant_settings', 'processed_events'];
 
 describe('vazamento entre tenants (RLS)', () => {
   beforeAll(async () => {
     const a = principal(ANA, TENANT_A, ['tenant-admin', 'manager'], 'vendas');
     const d = depsFor(store);
+    await new TenantProvisioningService(d).onTenantCreated(tenantCriado(TENANT_A, ['climate_survey']));
     const social = new SocialService(d);
     const survey = new SurveyService(d);
     await social.giveFeedback(a, BRUNO, 'privado');

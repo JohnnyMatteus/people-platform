@@ -20,8 +20,15 @@ export class SurveyService {
     input: { title: string; questions: SurveyQuestion[]; segments: string[]; minGroupSize?: number },
   ): Promise<Survey> {
     requireRole(p, 'tenant-admin');
-    const s = createSurvey({ ...input, id: this.d.newId(), tenantId: p.tenantId, now: this.d.now() });
     return this.d.store.inTenant(p.tenantId, async (tx) => {
+      const settings = await tx.settings.get();
+      const s = createSurvey({
+        ...input,
+        minGroupSize: input.minGroupSize ?? settings?.minGroupSize,
+        id: this.d.newId(),
+        tenantId: p.tenantId,
+        now: this.d.now(),
+      });
       await tx.surveys.insert(s);
       return s;
     });

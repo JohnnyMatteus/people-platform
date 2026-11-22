@@ -1,9 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- linhas cruas do driver pg */
 import type { PoolClient } from 'pg';
-import type { OutboxRepository, PointsRepository, SurveyRepository } from '../../app/ports';
+import type {
+  OutboxRepository,
+  PointsRepository,
+  ProcessedEventRepository,
+  SurveyRepository,
+  TenantSettingsRepository,
+} from '../../app/ports';
 import type { OutboxEvent } from '../../domain/events';
 import type { PointEntry, PointReason } from '../../domain/gamification';
 import type { Survey, SurveyResponse } from '../../domain/survey';
+import type { TenantSettings } from '../../domain/tenant-settings';
 
 const survey = (r: any): Survey => ({
   id: r.id, tenantId: r.tenant_id, title: r.title, status: r.status, questions: r.questions,
@@ -139,5 +146,40 @@ export class PostgresOutbox implements OutboxRepository {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [e.id, e.tenantId, e.aggregateType, e.aggregateId, e.eventType, e.eventVersion, JSON.stringify(e.payload), e.occurredAt],
     );
+  }
+}
+
+export class PostgresTenantSettings implements TenantSettingsRepository {
+  constructor(private readonly c: PoolClient) {}
+
+  async get() {
+    const { rows } = await this.c.query(
+      'SELECT tenant_id, slug, name, plan, climate_enabled, min_group_size FROM tenant_settings',
+    );
+    const r = rows[0];
+    return r
+      ? { tenantId: r.tenant_id, slug: r.slug, name: r.name, plan: r.plan, climateEnabled: r.climate_enabled, minGroupSize: r.min_group_size }
+      : null;
+  }
+
+  async upsert(s: TenantSettings, now: Date) {
+    await this.c.query(
+      `INSERT INTO tenant_settings (tenant_id, slug, name, plan, climate_enabled, min_group_size, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (tenant_id) DO UPDATE SET slug = $2, name = $3, plan = $4, climate_enabled = $5, updated_at = $7`,
+      [s.tenantId, s.slug, s.name, s.plan, s.climateEnabled, s.minGroupSize, now],
+    );
+  }
+}
+
+export class PostgresProcessedEvents implements ProcessedEventRepository {
+  constructor(private readonly c: PoolClient) {}
+
+  async claim(eventId: string, eventType: string, now: Date) {
+    const r = await this.c.query(
+      'INSERT INTO processed_events (tenant_id, event_id, event_type, processed_at) VALUES (app_current_tenant(), $1, $2, $3) ON CONFLICT DO NOTHING',
+      [eventId, eventType, now],
+    );
+    return (r.rowCount ?? 0) > 0;
   }
 }

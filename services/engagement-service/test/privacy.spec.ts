@@ -31,6 +31,9 @@ async function seed(store: MemoryStore) {
     await new OneOnOneService(d).schedule(ana, BRUNO, new Date('2026-12-01T10:00:00Z'));
     const post = await social.publishPost(ana, 'Aviso da Ana', 'texto');
     await social.confirmRead(principal(BRUNO, tenant), post.id);
+    // A Ana também lê um comunicado de outra pessoa: sem isso ela não teria nenhuma confirmação de leitura para apagar.
+    const bruno = principal(BRUNO, tenant, ['manager']);
+    await social.confirmRead(ana, (await social.publishPost(bruno, 'Aviso do Bruno', 'texto')).id);
   }
   for (const e of store.outbox.filter((o) => o.eventType === 'ElogioPublicado')) {
     await gamification.onPraisePublished({ event_id: e.id, event_type: 'ElogioPublicado', tenant_id: e.tenantId, data: e.payload as never });

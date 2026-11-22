@@ -53,6 +53,11 @@ export class GamificationConsumer {
       eachMessage: async ({ message }) => {
         const env = JSON.parse(message.value?.toString() ?? '{}') as ElogioPublicadoEnvelope;
         if (env.event_type !== 'ElogioPublicado') return;
+        if (!env.event_id || !env.tenant_id || !env.data?.from_employee_id || !Array.isArray(env.data.to_employee_ids)) {
+          // Fora do contrato: repetir não adianta e travaria a partição (como o consumidor de tenants, descarta com aviso).
+          this.log.warn('ElogioPublicado fora do contrato descartado');
+          return;
+        }
         // Se lançar, o kafkajs reentrega; o razão de pontos é idempotente.
         await this.gamification.onPraisePublished(env);
       },

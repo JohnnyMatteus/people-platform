@@ -284,7 +284,10 @@ describe('exclusão de titular no Postgres real, com o papel da aplicação', ()
       const post = await social.publishPost(principal(subject, tenant, ['manager']), 'Aviso', 'texto');
       await social.confirmRead(principal(bystander, tenant), post.id);
     }
-    const outbox = await store.asPlatform((c) => c.query("SELECT id, tenant_id, payload FROM outbox WHERE event_type = 'ElogioPublicado'"));
+    const outbox = await store.asPlatform((c) =>
+      // Outros testes deste arquivo gravam ElogioPublicado com payload vazio; só os de elogio de verdade entram aqui.
+      c.query("SELECT id, tenant_id, payload FROM outbox WHERE event_type = 'ElogioPublicado' AND payload ? 'to_employee_ids'"),
+    );
     for (const e of outbox.rows) {
       await gamification.onPraisePublished({ event_id: e.id, event_type: 'ElogioPublicado', tenant_id: e.tenant_id, data: e.payload });
     }

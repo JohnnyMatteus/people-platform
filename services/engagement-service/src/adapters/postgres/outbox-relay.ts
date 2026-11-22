@@ -21,12 +21,14 @@ export class OutboxRelay {
   ) {}
 
   async runOnce(): Promise<number> {
-    return this.store.asPlatform(async (c) => {
+    // A falha é gravada dentro da transação (que commita) e o erro é relançado só depois do commit;
+    // lançar de dentro desfaria o UPDATE de attempts/last_error. O lock (FOR UPDATE) continua valendo.
+    const result = await this.store.asPlatform<{ sent: number } | { failure: unknown }>(async (c) => {
       const { rows } = await c.query(
         `SELECT * FROM outbox WHERE published_at IS NULL ORDER BY occurred_at, id LIMIT $1 FOR UPDATE SKIP LOCKED`,
         [this.batchSize],
       );
-      if (rows.length === 0) return 0;
+      if (rows.length === 0) return { sent: 0 };
       const events: OutboxEvent[] = rows.map((r) => ({
         id: r.id, tenantId: r.tenant_id, aggregateType: r.aggregate_type, aggregateId: r.aggregate_id,
         eventType: r.event_type, eventVersion: r.event_version, payload: r.payload, occurredAt: r.occurred_at,
@@ -39,11 +41,13 @@ export class OutboxRelay {
         await c.query('UPDATE outbox SET attempts = attempts + 1, last_error = $2 WHERE id = ANY($1)', [
           events.map((e) => e.id), String(err).slice(0, 500),
         ]);
-        throw err;
+        return { failure: err };
       }
       await c.query('UPDATE outbox SET published_at = now() WHERE id = ANY($1)', [events.map((e) => e.id)]);
-      return events.length;
+      return { sent: events.length };
     });
+    if ('failure' in result) throw result.failure;
+    return result.sent;
   }
 
   start(intervalMs: number): void {

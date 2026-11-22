@@ -10,7 +10,7 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile engagement-service
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
 GRADLE         := docker run --rm -v "$(CURDIR)/services/performance-service":/home/gradle/project \
@@ -21,7 +21,8 @@ SPECTRAL       := npx -y @stoplight/spectral-cli@6.15.0
 .PHONY: help up up-all down logs ps seed smoke test test-integration lint clean network \
         contracts-lint \
         tenant-service-lint tenant-service-test tenant-service-test-unit tenant-service-build tenant-service-up \
-        performance-service-lint performance-service-test performance-service-build
+        performance-service-lint performance-service-test performance-service-build \
+        engagement-service-lint engagement-service-test engagement-service-test-unit engagement-service-build engagement-service-up
 
 help: ## Lista os alvos disponíveis
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}'
@@ -57,11 +58,11 @@ network: ## Cria a rede externa compartilhada portfolio-net (opcional)
 	docker network inspect portfolio-net >/dev/null 2>&1 || docker network create portfolio-net
 
 # ------------------------------------------------------------------ qualidade
-lint: contracts-lint tenant-service-lint performance-service-lint ## Lint de contratos e de todos os serviços
+lint: contracts-lint tenant-service-lint performance-service-lint engagement-service-lint ## Lint de contratos e de todos os serviços
 
-test: tenant-service-test-unit performance-service-test ## Testes unitários de todos os serviços (sem Docker no Go)
+test: tenant-service-test-unit performance-service-test engagement-service-test-unit ## Testes unitários de todos os serviços (sem Docker no Go)
 
-test-integration: tenant-service-test ## Testes com infraestrutura real (Postgres via testcontainers)
+test-integration: tenant-service-test engagement-service-test ## Testes com infraestrutura real (Postgres via testcontainers)
 
 contracts-lint: ## Valida OpenAPI e AsyncAPI com Spectral
 	$(SPECTRAL) lint "contracts/openapi/*.yaml" "contracts/asyncapi/*.yaml" --fail-severity=warn
@@ -91,3 +92,19 @@ performance-service-test: ## Testes JUnit do núcleo de domínio (via Docker)
 
 performance-service-build: ## Compila e empacota o núcleo (via Docker)
 	$(GRADLE) build
+
+# ------------------------------------------------------ engagement-service
+engagement-service-lint: ## eslint + tsc
+	$(MAKE) -C services/engagement-service lint
+
+engagement-service-test: ## Todos os testes, inclusive integração com Postgres (precisa de Docker)
+	$(MAKE) -C services/engagement-service test
+
+engagement-service-test-unit: ## Testes sem Docker
+	$(MAKE) -C services/engagement-service test-unit
+
+engagement-service-build: ## Compila o TypeScript
+	$(MAKE) -C services/engagement-service build
+
+engagement-service-up: ## Sobe o núcleo e o engagement-service (migração inclusa)
+	$(COMPOSE) $(PROFILES_CORE) --profile engagement-service up -d --build --wait

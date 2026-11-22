@@ -38,6 +38,7 @@ Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pront
 | Serviço | Linguagem | Responsabilidade | Status |
 | --- | --- | --- | --- |
 | [`services/tenant-service`](services/tenant-service) | Go | Tenants, planos e features, white label, domínios, resolução de tenant | ✅ |
+| [`services/engagement-service`](services/engagement-service) | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | ✅ |
 | [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI | 🟡 núcleo de domínio |
 | `services/recruitment-service` | PHP + Laravel | ATS | 📝 [contrato](contracts/openapi/recruitment-service.yaml) |
 | `services/engagement-service` | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | 📝 [contrato](contracts/openapi/engagement-service.yaml) |
@@ -97,6 +98,7 @@ Pré-requisitos: Docker com Compose v2, Go 1.26+ e Node 20+ (só para o lint de 
 cp .env.example .env          # opcional: os padrões do compose já funcionam
 make up                       # núcleo: Postgres, Kafka, Keycloak, gateway, LocalStack, Mailpit
 make tenant-service-up        # build + migração + tenant-service
+make engagement-service-up    # build + migração + engagement-service (porta 8082)
 make seed                     # os dois tenants fictícios (IDs iguais aos do realm do Keycloak)
 make smoke                    # fluxo ponta a ponta pelo gateway com tokens reais
 ```

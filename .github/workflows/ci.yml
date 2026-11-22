@@ -24,6 +24,7 @@ jobs:
       tenant-service: ${{ steps.filter.outputs.tenant-service }}
       performance-service: ${{ steps.filter.outputs.performance-service }}
       platform: ${{ steps.filter.outputs.platform }}
+      engagement-service: ${{ steps.filter.outputs.engagement-service }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -40,6 +41,10 @@ jobs:
               - '.github/workflows/ci.yml'
             performance-service:
               - 'services/performance-service/**'
+              - '.github/workflows/ci.yml'
+            engagement-service:
+              - 'services/engagement-service/**'
+              - 'contracts/asyncapi/schemas/**'
               - '.github/workflows/ci.yml'
             platform:
               - 'docker-compose*.yml'
@@ -100,6 +105,30 @@ jobs:
       - name: Lint, testes e build (ktlint + JUnit)
         run: gradle --no-daemon --console=plain ktlintCheck test build
 
+  engagement-service:
+    needs: changes
+    if: needs.changes.outputs.engagement-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/engagement-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/engagement-service/package-lock.json
+      - run: make install
+      - name: Lint (eslint + tsc)
+        run: make lint
+      - name: Testes (unitários + Postgres real via testcontainers)
+        run: make test
+      - name: Build
+        run: make build
+      - name: Imagem Docker
+        run: docker build -t people-platform/engagement-service:ci .
+
   platform:
     needs: changes
     if: needs.changes.outputs.platform == 'true'
@@ -107,7 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile engagement-service config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido

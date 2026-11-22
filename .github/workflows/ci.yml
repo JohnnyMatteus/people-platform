@@ -230,3 +230,17 @@ jobs:
         run: python3 -m json.tool infra/keycloak/realm-people.json > /dev/null
       - name: ShellCheck nos scripts
         run: shellcheck scripts/*.sh init/aws/*.sh infra/postgres/init/*.sh
+
+  # Agregador: um único check obrigatório. Jobs pulados pelo filtro de caminhos contam como sucesso.
+  ci-ok:
+    name: CI ok
+    needs: [changes, contracts, tenant-service, performance-service, recruitment-service, engagement-service, analytics-ai-service, platform]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Falha se algum job falhou ou foi cancelado
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac

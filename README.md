@@ -24,9 +24,9 @@ A People Platform reúne esses módulos numa plataforma única que cada empresa 
 | Desempenho: ciclos e assessment | Auto, gestor, pares, 180/360 e assessment de competências | 📝 Contrato esboçado |
 | Objetivos e metas (OKR) | Desdobramento empresa → colaborador, check-ins | 📋 Planejado |
 | PDI | Planos a partir de gaps, ações sugeridas por IA | 📋 Planejado |
-| Recrutamento (ATS) | Vagas, pipeline por etapas, entrevistas, scorecards | 📝 Contrato esboçado |
-| Engajamento | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | 📝 Contrato esboçado; ADR de anonimato |
-| People analytics | Turnover, tempo de casa, admissões e desligamentos, sempre agregados | 📝 Contrato esboçado |
+| Recrutamento (ATS) | Vagas, pipeline por etapas, entrevistas, scorecards | ✅ Implementado |
+| Engajamento | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | ✅ Implementado; ADR de anonimato |
+| People analytics | Turnover, tempo de casa, admissões e desligamentos, sempre agregados | 🟡 Implementado com read models em memória |
 | Aprendizagem (LXM) | Trilhas e recomendação | 📋 Planejado (só documentado) |
 | IA transversal | Feedback, plano de ação do clima, PDI, contexto de 1:1 | 📝 ADR e contrato esboçado |
 | Front-end (Vue 3) | White label por tokens | 📋 Planejado |
@@ -189,7 +189,7 @@ Os roteiros de entrevista sobre os núcleos explicam a solução, as alternativa
 
 1. **performance-service:** camada Spring Boot conforme o [OpenAPI](contracts/openapi/performance-service.yaml), persistência com RLS, consumo de `TenantCriado` e publicação de `NineBoxCalibrado`.
 2. **Provisionador do Keycloak:** consumir `TenantCriado` e criar a Organization.
-3. **engagement-service (NestJS) e analytics-ai-service (FastAPI)** a partir dos contratos esboçados, cada um com RLS, outbox e testes de vazamento.
+3. **analytics-ai-service:** adaptador Postgres com RLS no lugar dos read models em memória; produtor real de `ColaboradorAtualizado` e `ColaboradorDesligado` (integração com o RH).
 4. **Fluxo de exclusão de titular (LGPD)** ponta a ponta e limpeza da outbox.
 5. **Front-end Vue 3** consumindo `/branding`, com configurador de tema e prévia de contraste.
 6. **Kubernetes** (Helm e GitOps), Schema Registry e Debezium.

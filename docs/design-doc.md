@@ -152,8 +152,8 @@ Relações principais:
 | tenant-service | Go | Tenants, planos e features, white label, domínios, resolução de tenant, `TenantCriado` | Implementado |
 | performance-service | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs, PDI | Núcleo de domínio (nine box, calibração, histórico, sucessão) |
 | recruitment-service | PHP + Laravel | ATS | Implementado |
-| engagement-service | TypeScript + NestJS | Feedback, elogios, 1:1, clima, gamificação, rede social | Implementado (sem rota no gateway ainda) |
-| analytics-ai-service | Python + FastAPI | People analytics e IA | Contrato esboçado |
+| engagement-service | TypeScript + NestJS | Feedback, elogios, 1:1, clima, gamificação, rede social | Implementado |
+| analytics-ai-service | Python + FastAPI | People analytics e IA | Implementado (read models em memória) |
 | learning-service | a definir | LXM | Documentado |
 | web | Vue 3 | Front-end white label | Planejado |
 
@@ -344,7 +344,8 @@ Os contratos estão em [`contracts/asyncapi/people-platform.yaml`](../contracts/
 
 | Evento | Produtor | Consumidores | Efeito |
 | --- | --- | --- | --- |
-| `TenantCriado` | tenant-service | todos, mais o provisionador do Keycloak | Cria a projeção do tenant e a Organization |
+| `TenantCriado` | tenant-service | recruitment, engagement e analytics-ai (implementado); provisionador do Keycloak (planejado) | Prepara pipeline padrão e configurações do tenant; cria a Organization |
+| `ColaboradorAtualizado` / `ColaboradorDesligado` | people-directory (integração com o RH) | analytics-ai-service | Vínculo com área, unidade e faixa etária agregada; alimentam turnover e tempo de casa, sem dados pessoais |
 | `TenantPlanoAlterado` | tenant-service | todos | Liga ou desliga módulos conforme as features |
 | `AvaliacaoConcluida` | performance-service | performance (calibração), analytics-ai (gaps → PDI) | Entra na sessão de calibração; gaps viram sugestões de PDI |
 | `NineBoxCalibrado` | performance-service | performance (PDI, sucessão), analytics-ai | Histórico; sugestão de prontidão; indicadores agregados |

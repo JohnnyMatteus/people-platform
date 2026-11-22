@@ -8,14 +8,17 @@ Artisan::command('outbox:relay {--once : Esvazia a outbox uma vez e sai}', funct
     $batch = config('recruitment.kafka.relay_batch');
 
     do {
-        $published = $relay->drain($batch);
-        if ($published > 0) {
-            $this->info("{$published} evento(s) publicado(s).");
+        $result = $relay->drain($batch);
+        if ($result->published > 0) {
+            $this->info("{$result->published} evento(s) publicado(s).");
         }
-        if ($this->option('once') && $published < $batch) {
-            return;
+        if ($result->failed > 0) {
+            $this->error("{$result->failed} evento(s) falharam e seguem pendentes (veja outbox.last_error).");
         }
-        if ($published === 0) {
+        if ($this->option('once') && ($result->failed > 0 || $result->published < $batch)) {
+            return $result->failed > 0 ? 1 : 0;
+        }
+        if ($result->published === 0) {
             sleep(1);
         }
     } while (true);

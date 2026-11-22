@@ -117,8 +117,8 @@ class TenantIsolationTest extends TestCase
             }
         };
 
-        $this->assertSame(2, (new OutboxRelay($tx, $publisher))->drain(10));
+        $this->assertSame(2, (new OutboxRelay($tx, $publisher))->drain(10)->published);
         $this->assertEqualsCanonicalizing([[self::A, self::A, 'CandidatoContratado'], [self::B, self::B, 'CandidatoContratado']], $published);
-        $this->assertSame(0, (new OutboxRelay($tx, $publisher))->drain(10));
+        $this->assertSame(0, (new OutboxRelay($tx, $publisher))->drain(10)->published);
     }
 }

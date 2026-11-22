@@ -184,3 +184,22 @@ async def test_ingestor_deduplicates_and_a_failure_after_the_claim_rolls_it_back
             assert await tx.claim_event(TENANT_A, event_id) is True
             raise RuntimeError("falha depois do claim")
     assert await repo.claim_event(TENANT_A, event_id) is True
+
+
+async def test_erase_subject_removes_only_the_subject_in_the_tenant(repo):
+    cycle = await _seed(repo, TENANT_A)
+    await _seed(repo, TENANT_B)
+    subject = (await repo.list_employment(TENANT_A))[0].employee_id
+    # O mesmo employee_id gravado no tenant B: a exclusão pedida no A não pode alcançá-lo.
+    await repo.upsert_employment(_employment(TENANT_B, subject))
+    await repo.save_nine_box(NineBoxFact(TENANT_B, subject, cycle, "Q5"))
+
+    removed = await repo.erase_subject(TENANT_A, subject)
+
+    assert removed == 3  # vínculo, avaliação e nine box
+    assert await repo.get_employment(TENANT_A, subject) is None
+    assert await repo.latest_assessment(TENANT_A, subject) is None
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await repo.get_employment(TENANT_B, subject) is not None
+    assert len(await repo.list_nine_box(TENANT_B, cycle)) == 1
+    assert await repo.erase_subject(TENANT_A, subject) == 0  # idempotente

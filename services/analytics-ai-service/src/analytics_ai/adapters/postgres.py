@@ -166,6 +166,17 @@ class _TxRepository:
             tuple(SurveySegment(s["segment_key"], s["respondents"], s["scores"]) for s in segments),
         )
 
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
+        removed = 0
+        for table in ("employment_records", "assessment_facts", "nine_box_facts"):
+            tag = await self._c.execute(
+                f"DELETE FROM {table} WHERE tenant_id = $1 AND employee_id = $2",  # noqa: S608 - nomes fixos, sem entrada externa
+                tenant_id,
+                subject_id,
+            )
+            removed += int(tag.rsplit(" ", 1)[-1])
+        return removed
+
 
 class PostgresRepository:
     """Cada chamada avulsa é uma transação curta com o escopo do tenant; o consumidor usa `unit_of_work`."""
@@ -244,3 +255,7 @@ class PostgresRepository:
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None:
         async with self.unit_of_work(tenant_id) as tx:
             return await tx.get_survey(tenant_id, survey_id)
+
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
+        async with self.unit_of_work(tenant_id) as tx:
+            return await tx.erase_subject(tenant_id, subject_id)

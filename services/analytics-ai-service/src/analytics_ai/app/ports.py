@@ -31,6 +31,9 @@ class ReadModelRepository(Protocol):
     async def save_survey(self, fact: SurveyFact) -> None: ...
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None: ...
 
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
+        """Apaga vínculo, avaliação e nine box do titular neste tenant. Devolve quantas linhas apagou."""
+
 
 class UnitOfWork(Protocol):
     """Unidade de trabalho de um tenant: tudo que acontece dentro vale junto ou não vale.

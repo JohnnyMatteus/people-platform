@@ -75,3 +75,14 @@ class InMemoryRepository:
 
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None:
         return self._surveys[tenant_id].get(survey_id)
+
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
+        removed = 0
+        if self._employment[tenant_id].pop(subject_id, None) is not None:
+            removed += 1
+        if self._assessments[tenant_id].pop(subject_id, None) is not None:
+            removed += 1
+        for key in [k for k in self._nine_box[tenant_id] if k[1] == subject_id]:
+            del self._nine_box[tenant_id][key]
+            removed += 1
+        return removed

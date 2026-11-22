@@ -27,6 +27,7 @@ from .events import (
     NineBoxCalibradoData,
     PesquisaClimaEncerradaData,
     TenantCriadoData,
+    TitularExclusaoSolicitadaData,
 )
 from .ports import ReadModelRepository, UnitOfWork
 
@@ -48,6 +49,7 @@ class EventIngestor:
             "AvaliacaoConcluida": self._assessment,
             "NineBoxCalibrado": self._nine_box,
             "PesquisaClimaEncerrada": self._survey,
+            "TitularExclusaoSolicitada": self._erase_subject,
         }
 
     async def handle(self, raw: dict[str, Any]) -> bool:
@@ -138,3 +140,15 @@ class EventIngestor:
         d = PesquisaClimaEncerradaData.model_validate(e.data)
         segments = tuple(SurveySegment(s.segment_key, s.respondents, s.scores) for s in d.segments)
         await repo.save_survey(SurveyFact(e.tenant_id, d.survey_id, d.min_group_size, segments))
+
+    async def _erase_subject(self, repo: ReadModelRepository, e: Envelope) -> None:
+        """LGPD: apaga o que o serviço projetou sobre o titular, só no tenant do evento (mesma transação do claim).
+
+        Os agregados já publicados (turnover, nine box por quadrante) são recalculados dos read models na leitura,
+        então deixam de contar a pessoa; não há cópia derivada para limpar."""
+        d = TitularExclusaoSolicitadaData.model_validate(e.data)
+        removed = await repo.erase_subject(e.tenant_id, d.subject_id)
+        log.info(
+            "exclusão de titular aplicada",
+            extra={"request_id": str(d.request_id), "tenant_id": str(e.tenant_id), "removed": removed},
+        )

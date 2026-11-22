@@ -50,6 +50,11 @@ class ColaboradorDesligadoData(_Data):
     age_band: str = Field(pattern=r"^(<25|25-34|35-44|45-54|55\+|nao-informado)$")
 
 
+class TitularExclusaoSolicitadaData(_Data):
+    request_id: UUID
+    subject_id: UUID
+
+
 class TenantCriadoData(_Data):
     slug: str
     name: str

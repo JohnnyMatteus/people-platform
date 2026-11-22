@@ -23,6 +23,7 @@ export const router = createRouter({
     { path: '/recrutamento', name: 'recrutamento', component: () => import('@/features/recruitment/RecruitmentView.vue'), meta: { roles: ['manager', 'tenant-admin'], title: 'Recrutamento' } },
     { path: '/recrutamento/vagas/:jobId', name: 'vaga', component: () => import('@/features/recruitment/JobView.vue'), meta: { roles: ['manager', 'tenant-admin'], title: 'Vaga' } },
     { path: '/engajamento', name: 'engajamento', component: () => import('@/features/engagement/EngagementView.vue'), meta: { title: 'Engajamento' } },
+    { path: '/aprendizagem', name: 'aprendizagem', component: () => import('@/features/learning/LearningView.vue'), meta: { title: 'Aprendizagem' } },
     { path: '/analytics', name: 'analytics', component: () => import('@/features/analytics/AnalyticsView.vue'), meta: { roles: ['manager', 'tenant-admin'], title: 'Analytics' } },
     { path: '/:rest(.*)*', name: 'nao-encontrado', component: () => import('@/features/auth/NotFoundView.vue'), meta: { public: true, title: 'Não encontrado' } },
   ],

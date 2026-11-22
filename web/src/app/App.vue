@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiAccountOutline, mdiBriefcaseSearchOutline, mdiChartBoxOutline, mdiClipboardTextOutline, mdiForumOutline, mdiGridLarge, mdiLogout, mdiSourceBranch, mdiStairs, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountOutline, mdiBriefcaseSearchOutline, mdiChartBoxOutline, mdiClipboardTextOutline, mdiForumOutline, mdiGridLarge, mdiSchoolOutline, mdiLogout, mdiSourceBranch, mdiStairs, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { useLocalStorage } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -26,6 +26,7 @@ const nav = [
   { to: '/sucessao', label: 'Sucessão', icon: mdiStairs, roles: ['manager', 'tenant-admin'] },
   { to: '/recrutamento', label: 'Recrutamento', icon: mdiBriefcaseSearchOutline, roles: ['manager', 'tenant-admin'] },
   { to: '/engajamento', label: 'Engajamento', icon: mdiForumOutline },
+  { to: '/aprendizagem', label: 'Aprendizagem', icon: mdiSchoolOutline },
   { to: '/analytics', label: 'Analytics', icon: mdiChartBoxOutline, roles: ['manager', 'tenant-admin'] },
 ]
 const visible = computed(() => nav.filter((n) => !n.roles || n.roles.some((r) => roles.value.has(r))))

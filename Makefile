@@ -13,8 +13,9 @@ PROFILES_CORE  := --profile core
 PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
-GRADLE         := docker run --rm -v "$(CURDIR)/services/performance-service":/home/gradle/project \
-                  -v people-platform-gradle-cache:/home/gradle/.gradle -w /home/gradle/project $(GRADLE_IMAGE) \
+# Monta a raiz do repositório: os testes do serviço leem contracts/ (../../contracts).
+GRADLE         := docker run --rm -v "$(CURDIR)":/work \
+                  -v people-platform-gradle-cache:/home/gradle/.gradle -w /work/services/performance-service $(GRADLE_IMAGE) \
                   gradle --no-daemon --console=plain
 SPECTRAL       := npx -y @stoplight/spectral-cli@6.15.0
 

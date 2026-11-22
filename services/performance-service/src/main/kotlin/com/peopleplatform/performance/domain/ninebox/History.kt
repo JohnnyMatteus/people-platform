@@ -24,6 +24,12 @@ class NineBoxHistory(val tenantId: TenantId, val employeeId: EmployeeId) {
     val all: List<HistoryEntry> get() = entries.toList()
     val latest: HistoryEntry? get() = entries.lastOrNull()
 
+    /** Restaura entradas já gravadas (ordem cronológica); não passa pela regra de sessão fechada. */
+    fun restore(stored: List<HistoryEntry>) {
+        require(entries.isEmpty()) { "histórico já tem entradas" }
+        entries += stored.sortedBy { it.closedAt }
+    }
+
     /** Registra o resultado de uma sessão fechada. Cada ciclo entra uma única vez. */
     fun record(outcome: CalibrationOutcome) {
         requireSameTenant(tenantId, outcome.tenantId)

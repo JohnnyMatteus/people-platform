@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: performance-service
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: true
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # Migrações rodam com o dono do esquema; a aplicação usa um papel sem BYPASSRLS.
+    url: ${DATABASE_MIGRATION_URL}
+    user: ${DATABASE_MIGRATION_USER}
+    password: ${DATABASE_MIGRATION_PASSWORD}
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS}
+    producer:
+      acks: all
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+performance:
+  security:
+    issuer: ${OIDC_ISSUER}
+    jwks-uri: ${OIDC_JWKS_URL}
+    audience: ${OIDC_AUDIENCE:people-api}
+  outbox:
+    topic: people.performance.events.v1
+    relay:
+      enabled: true
+      poll-interval: 1000

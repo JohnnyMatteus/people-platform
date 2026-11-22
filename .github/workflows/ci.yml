@@ -299,6 +299,8 @@ jobs:
         run: npm test
       - name: Typecheck e build
         run: npm run build
+      - name: Imagem Docker (nginx com proxy /api para o gateway)
+        run: docker build -t people-platform/web:ci .
 
   platform:
     needs: changes
@@ -307,7 +309,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service --profile web config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido

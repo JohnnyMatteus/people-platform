@@ -10,7 +10,7 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service --profile web
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
 # Monta a raiz do repositório: os testes do serviço leem contracts/ (../../contracts).
@@ -134,3 +134,14 @@ analytics-ai-service-test: ## Testes unitários (LLM falso, sem rede)
 
 analytics-ai-service-up: ## Sobe o núcleo e o analytics-ai-service
 	$(COMPOSE) $(PROFILES_CORE) --profile analytics-ai-service up -d --build --wait
+
+# --------------------------------------------------- web
+.PHONY: web-lint web-test web-up
+web-lint: ## eslint + vue-tsc
+	cd web && npm run lint && npm run typecheck
+
+web-test: ## vitest (inclui o contrato front x gateway)
+	cd web && npm test
+
+web-up: ## Sobe o núcleo e o front-end em http://localhost:5173 (precisa dos serviços que as telas usam)
+	$(COMPOSE) $(PROFILES_CORE) --profile web up -d --build --wait

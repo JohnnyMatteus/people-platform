@@ -10,6 +10,8 @@ export default tseslint.config(
   {
     files: ['**/*.vue'],
     languageOptions: { parserOptions: { parser: tseslint.parser } },
+    // Globais do navegador (window, File...) já são conferidos pelo vue-tsc; no-undef só gera falso positivo no .vue.
+    rules: { 'no-undef': 'off' },
   },
   {
     rules: {

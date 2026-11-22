@@ -6,6 +6,7 @@
 #   recruitment-service  o ATS (PHP + Laravel), o job de migração e o relay da outbox
 #   engagement-service  o serviço NestJS e o job de migração dele
 #   analytics-ai-service  o serviço Python de analytics e IA
+#   web             o front-end Vue (nginx), em http://localhost:5173, falando com o gateway por /api
 # Uso: make up (core), make up-all (core + observability + tools + serviços). Senhas são só de dev.
 name: people-platform
 
@@ -364,6 +365,26 @@ services:
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/actuator/health/readiness"]
+    networks: [people-platform-net]
+
+  # ---------------------------------------------------------------- web (perfil web)
+  # A porta 5173 é a que o client people-web do Keycloak autoriza como redirect. O login OIDC acontece no
+  # navegador, contra o Keycloak publicado no host; as chamadas de API passam por /api, no gateway.
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_OIDC_AUTHORITY: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+    image: people-platform/web:dev
+    profiles: [web]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
     networks: [people-platform-net]
 
   # -------------------------------------------------------- observability

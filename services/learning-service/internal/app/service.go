@@ -103,6 +103,9 @@ func (s *Service) Enroll(ctx context.Context, p Principal, trackID uuid.UUID, em
 	}
 	var out domain.Enrollment
 	err := s.store.InTenant(ctx, p.TenantID, func(tx Tx) error {
+		if err := rejectErased(ctx, tx, target); err != nil {
+			return err
+		}
 		track, err := tx.Tracks().Get(ctx, trackID)
 		if err != nil {
 			return err
@@ -261,6 +264,9 @@ func (s *Service) BindOnboarding(ctx context.Context, p Principal, applicationID
 	}
 	var out domain.Enrollment
 	err := s.store.InTenant(ctx, p.TenantID, func(tx Tx) error {
+		if err := rejectErased(ctx, tx, employeeID); err != nil {
+			return err
+		}
 		a, err := tx.Onboarding().Get(ctx, applicationID)
 		if err != nil {
 			return err
@@ -291,4 +297,17 @@ func (s *Service) BindOnboarding(ctx context.Context, p Principal, applicationID
 		return tx.Onboarding().Bind(ctx, bound)
 	})
 	return out, err
+}
+
+// rejectErased impede recriar dado de um titular que já foi apagado (lápide): um pedido de exclusão não pode ser
+// desfeito por uma matrícula ou um vínculo que chegue depois.
+func rejectErased(ctx context.Context, tx Tx, subject uuid.UUID) error {
+	erased, err := tx.Privacy().IsErased(ctx, subject)
+	if err != nil {
+		return err
+	}
+	if erased {
+		return fmt.Errorf("%w: titular com exclusão registrada", domain.ErrConflict)
+	}
+	return nil
 }

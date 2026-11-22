@@ -80,7 +80,8 @@ type erasureData struct {
 }
 
 // eraseSubject apaga o que o serviço guarda sobre o titular no tenant do evento: matrículas, progresso e as atribuições
-// de integração já vinculadas a ele. É idempotente (claim por event_id) e só toca o tenant do envelope.
+// de integração já vinculadas a ele, e grava a lápide. subject_id é o colaborador (o `sub` do token, employee_id aqui);
+// o serviço não guarda candidatos. É idempotente (claim por event_id) e só toca o tenant do envelope.
 func (s *Service) eraseSubject(ctx context.Context, env envelope) (bool, error) {
 	var d erasureData
 	if err := json.Unmarshal(env.Data, &d); err != nil || d.SubjectID == uuid.Nil {
@@ -92,15 +93,11 @@ func (s *Service) eraseSubject(ctx context.Context, env envelope) (bool, error) 
 		if err != nil || !first {
 			return err
 		}
-		assignments, err := tx.Onboarding().DeleteForEmployee(ctx, d.SubjectID)
+		removed, err := tx.Privacy().EraseSubject(ctx, d.SubjectID, d.RequestID)
 		if err != nil {
 			return err
 		}
-		enrollments, err := tx.Enrollments().DeleteForEmployee(ctx, d.SubjectID)
-		if err != nil {
-			return err
-		}
-		applied = assignments+enrollments > 0
+		applied = removed > 0
 		return nil
 	})
 	return applied, err

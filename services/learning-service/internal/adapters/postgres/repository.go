@@ -141,11 +141,6 @@ func (r enrollmentRepo) query(ctx context.Context, where string, args ...any) ([
 	return list, prows.Err()
 }
 
-func (r enrollmentRepo) DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error) {
-	tag, err := r.t.tx.Exec(ctx, `DELETE FROM enrollments WHERE employee_id = $1`, employeeID)
-	return int(tag.RowsAffected()), err
-}
-
 func (r enrollmentRepo) MarkCompleted(ctx context.Context, enrollmentID, itemID uuid.UUID, at time.Time) error {
 	_, err := r.t.tx.Exec(ctx, `INSERT INTO enrollment_progress (enrollment_id, item_id, tenant_id, completed_at)
 		VALUES ($1,$2,$3,$4) ON CONFLICT (enrollment_id, item_id) DO NOTHING`, enrollmentID, itemID, r.t.tenant, at)
@@ -202,11 +197,6 @@ func (r onboardingRepo) Bind(ctx context.Context, a domain.OnboardingAssignment)
 	return err
 }
 
-func (r onboardingRepo) DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error) {
-	tag, err := r.t.tx.Exec(ctx, `DELETE FROM onboarding_assignments WHERE employee_id = $1`, employeeID)
-	return int(tag.RowsAffected()), err
-}
-
 type settingsRepo struct{ t *txn }
 
 func (r settingsRepo) DefaultOnboardingTrack(ctx context.Context) (*uuid.UUID, error) {
@@ -230,4 +220,20 @@ func (r processedRepo) Claim(ctx context.Context, eventID uuid.UUID, eventType s
 	tag, err := r.t.tx.Exec(ctx, `INSERT INTO processed_events (tenant_id, event_id, event_type, processed_at) VALUES ($1,$2,$3,$4)
 		ON CONFLICT DO NOTHING`, r.t.tenant, eventID, eventType, at)
 	return tag.RowsAffected() > 0, err
+}
+
+type privacyRepo struct{ t *txn }
+
+// EraseSubject chama erase_subject, a única via de exclusão: o papel da aplicação não tem DELETE nas tabelas.
+func (r privacyRepo) EraseSubject(ctx context.Context, subjectID, requestID uuid.UUID) (int, error) {
+	var removed int
+	err := r.t.tx.QueryRow(ctx, `SELECT erase_subject($1, $2)`, subjectID, requestID).Scan(&removed)
+	return removed, err
+}
+
+func (r privacyRepo) IsErased(ctx context.Context, subjectID uuid.UUID) (bool, error) {
+	var erased bool
+	err := r.t.tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM erased_subjects WHERE tenant_id = $1 AND subject_id = $2)`,
+		r.t.tenant, subjectID).Scan(&erased)
+	return erased, err
 }

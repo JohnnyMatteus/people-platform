@@ -304,3 +304,39 @@ func TestErasure_MalformedEventIsInvalid(t *testing.T) {
 		t.Fatalf("sem subject_id: %v", err)
 	}
 }
+
+func TestErasure_TombstoneBlocksResurrectionEvenWhenTheErasureArrivesFirst(t *testing.T) {
+	ctx := context.Background()
+	s := newService()
+	admin, _ := person(tenantA, "tenant-admin")
+	adminB, _ := person(tenantB, "tenant-admin")
+	trackA := seedTrack(t, s, admin, 1)
+	trackB := seedTrack(t, s, adminB, 1)
+	ana, anaID := person(tenantA, "employee")
+
+	// A exclusão chega antes de qualquer dado da Ana (não há ordem entre tópicos).
+	if _, err := s.HandleEvent(ctx, erasureEvent(tenantA, anaID, uuid.New())); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Enroll(ctx, ana, trackA.ID, nil); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("matrícula própria depois da exclusão: %v", err)
+	}
+	if _, err := s.Enroll(ctx, admin, trackA.ID, &anaID); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("matrícula atribuída depois da exclusão: %v", err)
+	}
+	application := uuid.New()
+	if _, err := s.HandleEvent(ctx, hiredEvent(tenantA, application, uuid.New())); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetDefaultOnboardingTrack(ctx, admin, trackA.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BindOnboarding(ctx, admin, application, anaID); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("vínculo de onboarding com titular apagado: %v", err)
+	}
+	// A lápide vale só no tenant do pedido.
+	anaInB := app.Principal{Subject: anaID.String(), TenantID: tenantB, Roles: []string{"employee"}}
+	if _, err := s.Enroll(ctx, anaInB, trackB.ID, nil); err != nil {
+		t.Fatalf("o mesmo id no tenant B não foi apagado: %v", err)
+	}
+}

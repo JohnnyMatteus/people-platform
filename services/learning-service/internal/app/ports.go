@@ -22,6 +22,7 @@ type Tx interface {
 	Onboarding() OnboardingRepository
 	Settings() SettingsRepository
 	ProcessedEvents() ProcessedEventRepository
+	Privacy() PrivacyRepository
 }
 
 type TrackRepository interface {
@@ -36,8 +37,6 @@ type EnrollmentRepository interface {
 	Insert(ctx context.Context, e domain.Enrollment) error
 	Get(ctx context.Context, id uuid.UUID) (domain.Enrollment, error)
 	ListFor(ctx context.Context, employeeID uuid.UUID) ([]domain.Enrollment, error)
-	// DeleteForEmployee apaga as matrículas da pessoa e, em cascata, o progresso. Devolve quantas apagou.
-	DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error)
 	// MarkCompleted é idempotente: concluir duas vezes mantém a primeira data.
 	MarkCompleted(ctx context.Context, enrollmentID, itemID uuid.UUID, at time.Time) error
 }
@@ -48,8 +47,6 @@ type OnboardingRepository interface {
 	Get(ctx context.Context, applicationID uuid.UUID) (domain.OnboardingAssignment, error)
 	ListPending(ctx context.Context) ([]domain.OnboardingAssignment, error)
 	Bind(ctx context.Context, a domain.OnboardingAssignment) error
-	// DeleteForEmployee apaga as atribuições já vinculadas à pessoa. Devolve quantas apagou.
-	DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error)
 }
 
 type SettingsRepository interface {
@@ -61,4 +58,13 @@ type SettingsRepository interface {
 type ProcessedEventRepository interface {
 	// Claim devolve true na primeira vez que vê o evento e false nas entregas repetidas.
 	Claim(ctx context.Context, eventID uuid.UUID, eventType string, at time.Time) (bool, error)
+}
+
+// PrivacyRepository é a porta da exclusão de titular. A aplicação não tem DELETE nas tabelas: no Postgres a exclusão é a
+// função erase_subject (SECURITY DEFINER), restrita ao tenant do escopo, que também grava a lápide.
+type PrivacyRepository interface {
+	// EraseSubject apaga o que o serviço guarda sobre a pessoa neste tenant e registra a lápide. Devolve quantas linhas apagou.
+	EraseSubject(ctx context.Context, subjectID, requestID uuid.UUID) (int, error)
+	// IsErased informa se há lápide: o projetor ignora dados novos sobre um titular já apagado.
+	IsErased(ctx context.Context, subjectID uuid.UUID) (bool, error)
 }

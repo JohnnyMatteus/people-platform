@@ -1,11 +1,13 @@
 openapi: 3.1.0
 info:
   title: People Platform - engagement-service
-  version: 0.0.1
+  version: 1.0.0
   summary: Feedback, elogios, 1:1, clima anônimo, gamificação e rede social.
   description: |
-    Esboço de contrato. O serviço será construído numa próxima rodada; este arquivo fixa os
-    recursos principais e as convenções (bearer JWT com tenant_id, problem+json, paginação por cursor).
+    API do engagement-service. Os erros seguem o RFC 9457 (`application/problem+json`).
+    O tenant e o colaborador vêm do token (`tenant_id` e `sub`), nunca do corpo da requisição.
+    Recursos de outro tenant respondem 404. Pesquisas de clima seguem o ADR 0007: a resposta não
+    tem identidade e os resultados só saem para segmentos com pelo menos k respondentes.
   license:
     name: MIT
     identifier: MIT
@@ -15,73 +17,373 @@ info:
 servers:
   - url: http://localhost:8000/engagement
     description: Gateway local (KrakenD)
+  - url: http://localhost:8082
+    description: Serviço direto (desenvolvimento)
 security:
   - bearerAuth: []
 tags:
-  - name: engagement
-    description: Feedback, elogios, 1:1, clima anônimo, gamificação e rede social.
+  - name: feedback
+    description: Feedback privado, visível só às duas partes.
+  - name: praises
+    description: Elogios públicos no feed.
+  - name: one-on-ones
+    description: 1:1 com pauta e contexto.
+  - name: surveys
+    description: Pesquisas de clima anônimas.
+  - name: gamification
+    description: Pontos e badges.
+  - name: posts
+    description: Rede social corporativa com confirmação de leitura.
 paths:
   /v1/feedbacks:
     post:
-      tags: [engagement]
+      tags: [feedback]
       operationId: giveFeedback
-      summary: Feedback privado entre líder e liderado (visível só às duas partes).
+      summary: Feedback privado para um colaborador (visível só às duas partes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GiveFeedback"
       responses:
         "201":
           description: Feedback registrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feedback"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    get:
+      tags: [feedback]
+      operationId: listFeedbacks
+      summary: Histórico de feedbacks em que o chamador é autor ou destinatário.
+      parameters:
+        - name: with
+          in: query
+          required: false
+          description: Restringe ao histórico com um colaborador.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Feedbacks, do mais recente para o mais antigo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Feedback"
+        "401":
+          $ref: "#/components/responses/Problem"
   /v1/praises:
     post:
-      tags: [engagement]
+      tags: [praises]
       operationId: praise
       summary: Elogio público no feed; gera pontos de gamificação.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GivePraise"
       responses:
         "201":
           description: Elogio publicado.
-  /v1/one-on-ones/{meetingId}/context:
-    parameters:
-      - name: meetingId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Praise"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
     get:
-      tags: [engagement]
-      operationId: oneOnOneContext
-      summary: Contexto automático da 1:1 (feedbacks recentes, metas, PDI), resumido por IA.
+      tags: [praises]
+      operationId: listPraises
+      summary: Feed de elogios do tenant.
       responses:
         "200":
-          description: Contexto.
-  /v1/surveys/{surveyId}/responses:
+          description: Elogios, do mais recente para o mais antigo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Praise"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /v1/one-on-ones:
+    post:
+      tags: [one-on-ones]
+      operationId: scheduleOneOnOne
+      summary: Agenda uma 1:1 entre o chamador e outro colaborador.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleOneOnOne"
+      responses:
+        "201":
+          description: 1:1 agendada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OneOnOne"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    get:
+      tags: [one-on-ones]
+      operationId: listOneOnOnes
+      summary: 1:1s em que o chamador participa.
+      responses:
+        "200":
+          description: 1:1s.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OneOnOne"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /v1/one-on-ones/{meetingId}/agenda-items:
     parameters:
-      - name: surveyId
+      - $ref: "#/components/parameters/MeetingId"
+    post:
+      tags: [one-on-ones]
+      operationId: addAgendaItem
+      summary: Adiciona um item à pauta (qualquer participante).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddAgendaItem"
+      responses:
+        "201":
+          description: 1:1 com a pauta atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OneOnOne"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/one-on-ones/{meetingId}/agenda-items/{itemId}/done:
+    parameters:
+      - $ref: "#/components/parameters/MeetingId"
+      - name: itemId
         in: path
         required: true
         schema:
           type: string
           format: uuid
     post:
-      tags: [engagement]
+      tags: [one-on-ones]
+      operationId: completeAgendaItem
+      summary: Marca um item da pauta como tratado.
+      responses:
+        "200":
+          description: 1:1 com a pauta atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OneOnOne"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/one-on-ones/{meetingId}/context:
+    parameters:
+      - $ref: "#/components/parameters/MeetingId"
+    get:
+      tags: [one-on-ones]
+      operationId: oneOnOneContext
+      summary: Contexto da 1:1 (feedbacks entre as partes e elogios recentes, pauta em aberto).
+      responses:
+        "200":
+          description: Contexto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OneOnOneContext"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/surveys:
+    post:
+      tags: [surveys]
+      operationId: createSurvey
+      summary: Cria uma pesquisa de clima com segmentos definidos antes da coleta (tenant-admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSurvey"
+      responses:
+        "201":
+          description: Pesquisa aberta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/surveys/{surveyId}:
+    parameters:
+      - $ref: "#/components/parameters/SurveyId"
+    get:
+      tags: [surveys]
+      operationId: getSurvey
+      summary: Perguntas e segmentos da pesquisa, e se o chamador já participou.
+      responses:
+        "200":
+          description: Pesquisa.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/surveys/{surveyId}/responses:
+    parameters:
+      - $ref: "#/components/parameters/SurveyId"
+    post:
+      tags: [surveys]
       operationId: answerSurvey
       summary: Resposta anônima de clima (sem employee_id na resposta, ADR 0007).
+      description: |
+        A participação (quem respondeu) e a resposta (o que foi dito) são gravadas em tabelas sem
+        vínculo entre si. Um segundo envio do mesmo colaborador responde 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerSurvey"
       responses:
         "202":
           description: Resposta aceita.
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/surveys/{surveyId}/close:
+    parameters:
+      - $ref: "#/components/parameters/SurveyId"
+    post:
+      tags: [surveys]
+      operationId: closeSurvey
+      summary: Encerra a pesquisa e publica PesquisaClimaEncerrada com agregados (tenant-admin).
+      responses:
+        "200":
+          description: Pesquisa encerrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
   /v1/surveys/{surveyId}/results:
     parameters:
-      - name: surveyId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/SurveyId"
     get:
-      tags: [engagement]
+      tags: [surveys]
       operationId: surveyResults
       summary: Resultados agregados por segmento; segmentos com menos de k respostas são suprimidos.
+      description: |
+        Só cortes pré-definidos. Segmentos abaixo de k são somados ao nível superior; quando a
+        diferença entre um corte e seus vizinhos isolaria menos de k pessoas, o vizinho também é
+        suprimido (supressão complementar).
       responses:
         "200":
           description: Resultados agregados.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyResults"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/points/me:
+    get:
+      tags: [gamification]
+      operationId: myPoints
+      summary: Pontos e badges do chamador.
+      responses:
+        "200":
+          description: Saldo, extrato e badges.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyPoints"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /v1/leaderboard:
+    get:
+      tags: [gamification]
+      operationId: leaderboard
+      summary: Ranking de pontos do tenant (top 10).
+      responses:
+        "200":
+          description: Ranking.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /v1/posts:
+    post:
+      tags: [posts]
+      operationId: publishPost
+      summary: Publica um comunicado na rede social (manager ou tenant-admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishPost"
+      responses:
+        "201":
+          description: Comunicado publicado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    get:
+      tags: [posts]
+      operationId: listPosts
+      summary: Comunicados do tenant, com o estado de leitura do chamador.
+      responses:
+        "200":
+          description: Comunicados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Problem"
   /v1/posts/{postId}/read-receipts:
     parameters:
       - name: postId
@@ -91,15 +393,404 @@ paths:
           type: string
           format: uuid
     post:
-      tags: [engagement]
+      tags: [posts]
       operationId: confirmRead
-      summary: Confirmação de leitura de um comunicado da rede social corporativa.
+      summary: Confirmação de leitura de um comunicado (idempotente).
       responses:
         "204":
           description: Leitura confirmada.
+        "404":
+          $ref: "#/components/responses/Problem"
+    get:
+      tags: [posts]
+      operationId: listReadReceipts
+      summary: Quem confirmou a leitura (só o autor do comunicado e tenant-admin).
+      responses:
+        "200":
+          description: Confirmações de leitura.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReadReceipt"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Token do Keycloak (realm people) com claims tenant_id e realm_access.roles.
+  parameters:
+    MeetingId:
+      name: meetingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SurveyId:
+      name: surveyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Problem:
+      description: Erro (RFC 9457).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+    GiveFeedback:
+      type: object
+      additionalProperties: false
+      required: [to_employee_id, body]
+      properties:
+        to_employee_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+    Feedback:
+      type: object
+      required: [id, from_employee_id, to_employee_id, body, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from_employee_id:
+          type: string
+          format: uuid
+        to_employee_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    GivePraise:
+      type: object
+      additionalProperties: false
+      required: [to_employee_ids, message]
+      properties:
+        to_employee_ids:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            format: uuid
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        values:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+    Praise:
+      type: object
+      required: [id, from_employee_id, to_employee_ids, message, values, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        from_employee_id:
+          type: string
+          format: uuid
+        to_employee_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        message:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+    ScheduleOneOnOne:
+      type: object
+      additionalProperties: false
+      required: [participant_id, scheduled_for]
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        scheduled_for:
+          type: string
+          format: date-time
+    AddAgendaItem:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+    AgendaItem:
+      type: object
+      required: [id, text, added_by, done]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        added_by:
+          type: string
+          format: uuid
+        done:
+          type: boolean
+    OneOnOne:
+      type: object
+      required: [id, leader_id, participant_id, scheduled_for, agenda]
+      properties:
+        id:
+          type: string
+          format: uuid
+        leader_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        scheduled_for:
+          type: string
+          format: date-time
+        agenda:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaItem"
+    OneOnOneContext:
+      type: object
+      required: [meeting, recent_feedbacks, recent_praises, open_agenda]
+      properties:
+        meeting:
+          $ref: "#/components/schemas/OneOnOne"
+        recent_feedbacks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Feedback"
+        recent_praises:
+          type: array
+          items:
+            $ref: "#/components/schemas/Praise"
+        open_agenda:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgendaItem"
+    SurveyQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, text]
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+    CreateSurvey:
+      type: object
+      additionalProperties: false
+      required: [title, questions, segments]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        questions:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SurveyQuestion"
+        segments:
+          type: array
+          minItems: 1
+          description: Cortes permitidos, no formato `area` ou `area/unidade`.
+          items:
+            type: string
+        min_group_size:
+          type: integer
+          minimum: 3
+          description: Valor de k; o padrão do serviço é 5 e o mínimo aceito é 3.
+    Survey:
+      type: object
+      required: [id, title, status, questions, segments, min_group_size]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [open, closed]
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SurveyQuestion"
+        segments:
+          type: array
+          items:
+            type: string
+        min_group_size:
+          type: integer
+        already_answered:
+          type: boolean
+    AnswerSurvey:
+      type: object
+      additionalProperties: false
+      required: [scores]
+      properties:
+        scores:
+          type: object
+          description: Nota de 1 a 5 por id de pergunta; todas as perguntas são obrigatórias.
+          additionalProperties:
+            type: integer
+            minimum: 1
+            maximum: 5
+        comment:
+          type: string
+          maxLength: 2000
+    SurveyResults:
+      type: object
+      required: [survey_id, min_group_size, segments]
+      properties:
+        survey_id:
+          type: string
+          format: uuid
+        min_group_size:
+          type: integer
+        participation:
+          type: integer
+          description: Total de participantes (adesão), sem nenhuma ligação com respostas.
+        segments:
+          type: array
+          items:
+            type: object
+            required: [segment_key, respondents, scores]
+            properties:
+              segment_key:
+                type: string
+              respondents:
+                type: integer
+              scores:
+                type: object
+                additionalProperties:
+                  type: number
+              comments:
+                type: array
+                items:
+                  type: string
+        suppressed:
+          type: integer
+          description: Quantidade de segmentos omitidos (sem revelar quais).
+    MyPoints:
+      type: object
+      required: [balance, ledger, badges]
+      properties:
+        balance:
+          type: integer
+        ledger:
+          type: array
+          items:
+            type: object
+            required: [points, reason, created_at]
+            properties:
+              points:
+                type: integer
+              reason:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+        badges:
+          type: array
+          items:
+            type: object
+            required: [code, awarded_at]
+            properties:
+              code:
+                type: string
+              awarded_at:
+                type: string
+                format: date-time
+    LeaderboardEntry:
+      type: object
+      required: [employee_id, points]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        points:
+          type: integer
+    PublishPost:
+      type: object
+      additionalProperties: false
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        body:
+          type: string
+          minLength: 1
+          maxLength: 8000
+    Post:
+      type: object
+      required: [id, author_id, title, body, created_at, read_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        read_count:
+          type: integer
+        read_by_me:
+          type: boolean
+    ReadReceipt:
+      type: object
+      required: [employee_id, read_at]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        read_at:
+          type: string
+          format: date-time

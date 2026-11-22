@@ -28,6 +28,7 @@ jobs:
       platform: ${{ steps.filter.outputs.platform }}
       web: ${{ steps.filter.outputs.web }}
       engagement-service: ${{ steps.filter.outputs.engagement-service }}
+      learning-service: ${{ steps.filter.outputs.learning-service }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -53,6 +54,10 @@ jobs:
               - '.github/workflows/ci.yml'
             engagement-service:
               - 'services/engagement-service/**'
+              - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            learning-service:
+              - 'services/learning-service/**'
               - 'contracts/asyncapi/schemas/**'
               - '.github/workflows/ci.yml'
             analytics-ai-service:
@@ -105,6 +110,28 @@ jobs:
         run: make build
       - name: Imagem Docker
         run: docker build -t people-platform/tenant-service:ci .
+
+  learning-service:
+    needs: changes
+    if: needs.changes.outputs.learning-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/learning-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/learning-service/go.mod
+          cache-dependency-path: services/learning-service/go.sum
+      - name: Lint (gofmt + go vet)
+        run: make lint
+      - name: Testes (unitários + Postgres real via testcontainers)
+        run: make test
+      - name: Build
+        run: make build
+      - name: Imagem Docker
+        run: docker build -t people-platform/learning-service:ci .
 
   performance-service:
     needs: changes
@@ -309,7 +336,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service --profile web config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service --profile learning-service --profile web config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido
@@ -320,7 +347,7 @@ jobs:
   # Agregador: um único check obrigatório. Jobs pulados pelo filtro de caminhos contam como sucesso.
   ci-ok:
     name: CI ok
-    needs: [changes, contracts, tenant-service, performance-service, recruitment-service, engagement-service, analytics-ai-service, web, platform]
+    needs: [changes, contracts, tenant-service, performance-service, recruitment-service, engagement-service, analytics-ai-service, learning-service, web, platform]
     if: always()
     runs-on: ubuntu-latest
     steps:

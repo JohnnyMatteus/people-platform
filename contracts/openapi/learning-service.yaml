@@ -1,0 +1,482 @@
+openapi: 3.1.0
+info:
+  title: People Platform - learning-service
+  version: 1.0.0
+  summary: Trilhas de aprendizagem, matrículas, progresso, sugestão do próximo conteúdo e onboarding.
+  description: |
+    API do learning-service. Os erros seguem o RFC 9457 (`application/problem+json`).
+    O tenant e o colaborador vêm do token (`tenant_id` e `sub`), nunca do corpo ou da query.
+    Recursos de outro tenant, e matrículas de outra pessoa, respondem 404. A integração de quem é
+    contratado nasce do evento `CandidatoContratado`, que traz a candidatura e não a pessoa: a
+    atribuição fica pendente até o RH informar o colaborador (`/v1/onboarding/{applicationId}/bind`).
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: People Platform
+    url: https://github.com/JohnnyMatteus/people-platform
+servers:
+  - url: http://localhost:8000/learning
+    description: Gateway local (KrakenD)
+  - url: http://localhost:8086
+    description: Serviço direto (desenvolvimento)
+security:
+  - bearerAuth: []
+tags:
+  - name: tracks
+    description: Trilhas e conteúdos (tenant-admin escreve; qualquer colaborador lê).
+  - name: me
+    description: Matrículas, progresso e sugestões da própria pessoa.
+  - name: onboarding
+    description: Integração de contratados.
+paths:
+  /v1/tracks:
+    get:
+      tags: [tracks]
+      operationId: listTracks
+      summary: Trilhas do tenant.
+      responses:
+        "200":
+          description: Trilhas, da mais antiga para a mais recente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Track"
+    post:
+      tags: [tracks]
+      operationId: createTrack
+      summary: Cria uma trilha vazia (tenant-admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTrack"
+      responses:
+        "201":
+          description: Trilha criada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/tracks/{trackId}:
+    parameters:
+      - $ref: "#/components/parameters/TrackId"
+    get:
+      tags: [tracks]
+      operationId: getTrack
+      summary: Uma trilha com os conteúdos em ordem.
+      responses:
+        "200":
+          description: Trilha.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/tracks/{trackId}/items:
+    parameters:
+      - $ref: "#/components/parameters/TrackId"
+    post:
+      tags: [tracks]
+      operationId: addTrackItem
+      summary: Acrescenta um conteúdo ao fim da trilha (tenant-admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddItem"
+      responses:
+        "201":
+          description: Trilha com o novo conteúdo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/tracks/{trackId}/enrollments:
+    parameters:
+      - $ref: "#/components/parameters/TrackId"
+    post:
+      tags: [tracks]
+      operationId: enroll
+      summary: Matricula a própria pessoa; com employee_id, o tenant-admin matricula outra pessoa.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Enroll"
+      responses:
+        "201":
+          description: Matrícula criada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/me/enrollments:
+    get:
+      tags: [me]
+      operationId: listMyEnrollments
+      summary: Matrículas da própria pessoa, com trilha, progresso e próximo conteúdo.
+      responses:
+        "200":
+          description: Matrículas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Enrollment"
+  /v1/me/enrollments/{enrollmentId}/items/{itemId}/complete:
+    parameters:
+      - name: enrollmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [me]
+      operationId: completeItem
+      summary: Conclui um conteúdo (idempotente; matrícula de outra pessoa responde 404).
+      responses:
+        "200":
+          description: Matrícula atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/me/suggestions:
+    get:
+      tags: [me]
+      operationId: suggestions
+      summary: O que fazer agora e, com competency, conteúdos que desenvolvem aquela competência.
+      parameters:
+        - name: competency
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sugestões.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suggestions"
+  /v1/onboarding/default-track:
+    get:
+      tags: [onboarding]
+      operationId: getDefaultOnboardingTrack
+      summary: Trilha de integração do tenant (tenant-admin); track_id nulo se ainda não escolhida.
+      responses:
+        "200":
+          description: Trilha de integração.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultTrack"
+        "403":
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [onboarding]
+      operationId: setDefaultOnboardingTrack
+      summary: Escolhe a trilha de integração do tenant (tenant-admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetDefaultTrack"
+      responses:
+        "200":
+          description: Trilha escolhida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DefaultTrack"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/onboarding/pending:
+    get:
+      tags: [onboarding]
+      operationId: listPendingOnboarding
+      summary: Contratações que esperam o colaborador ser informado (tenant-admin).
+      responses:
+        "200":
+          description: Pendências.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingOnboarding"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /v1/onboarding/{applicationId}/bind:
+    parameters:
+      - name: applicationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [onboarding]
+      operationId: bindOnboarding
+      summary: Informa o colaborador contratado e o matricula na trilha de integração (tenant-admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindOnboarding"
+      responses:
+        "201":
+          description: Matrícula de integração criada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enrollment"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          description: Já vinculada, ou o tenant ainda não escolheu a trilha de integração.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TrackId:
+      name: trackId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Problem:
+      description: Erro (RFC 9457).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+    CreateTrack:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 160
+        description:
+          type: string
+    AddItem:
+      type: object
+      additionalProperties: false
+      required: [title, kind, minutes]
+      properties:
+        title:
+          type: string
+          maxLength: 160
+        kind:
+          type: string
+          enum: [video, article, course, practice]
+        minutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+        competency:
+          type: string
+    Item:
+      type: object
+      required: [id, position, title, kind, minutes]
+      properties:
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [video, article, course, practice]
+        minutes:
+          type: integer
+        competency:
+          type: string
+    Track:
+      type: object
+      required: [id, title, description, minutes, items]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        minutes:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Item"
+    Enroll:
+      type: object
+      additionalProperties: false
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+    Enrollment:
+      type: object
+      required: [id, track_id, employee_id, source, enrolled_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        track_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum: [self, assigned, onboarding]
+        enrolled_at:
+          type: string
+          format: date-time
+        track:
+          $ref: "#/components/schemas/Track"
+        done_items:
+          type: integer
+        total_items:
+          type: integer
+        next_item:
+          $ref: "#/components/schemas/Item"
+        completed:
+          type: object
+          description: Conteúdos concluídos, por id, com a data de conclusão.
+          additionalProperties:
+            type: string
+            format: date-time
+    Suggestion:
+      type: object
+      required: [track_id, track_title, item, reason]
+      properties:
+        track_id:
+          type: string
+          format: uuid
+        track_title:
+          type: string
+        item:
+          $ref: "#/components/schemas/Item"
+        reason:
+          type: string
+    Suggestions:
+      type: object
+      required: [next, for_competency]
+      properties:
+        next:
+          type: array
+          items:
+            $ref: "#/components/schemas/Suggestion"
+        for_competency:
+          type: array
+          items:
+            $ref: "#/components/schemas/Suggestion"
+    DefaultTrack:
+      type: object
+      required: [track_id]
+      properties:
+        track_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+    SetDefaultTrack:
+      type: object
+      additionalProperties: false
+      required: [track_id]
+      properties:
+        track_id:
+          type: string
+          format: uuid
+    PendingOnboarding:
+      type: object
+      required: [application_id, position_title, unit, start_date]
+      properties:
+        application_id:
+          type: string
+          format: uuid
+        position_title:
+          type: string
+        unit:
+          type: string
+        start_date:
+          type: string
+          format: date
+    BindOnboarding:
+      type: object
+      additionalProperties: false
+      required: [employee_id]
+      properties:
+        employee_id:
+          type: string
+          format: uuid

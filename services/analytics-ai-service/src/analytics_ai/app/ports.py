@@ -5,13 +5,21 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from analytics_ai.domain.models import AssessmentFact, EmploymentRecord, NineBoxFact, SurveyFact
+from analytics_ai.domain.models import (
+    AssessmentFact,
+    EmploymentRecord,
+    NineBoxFact,
+    SurveyFact,
+    TenantSettings,
+)
 
 
 class ReadModelRepository(Protocol):
     async def claim_event(self, tenant_id: UUID, event_id: UUID) -> bool:
         """Registra o evento como processado. False se já tinha sido (deduplicação)."""
 
+    async def save_tenant_settings(self, settings: TenantSettings) -> None: ...
+    async def get_tenant_settings(self, tenant_id: UUID) -> TenantSettings | None: ...
     async def upsert_employment(self, record: EmploymentRecord) -> None: ...
     async def get_employment(self, tenant_id: UUID, employee_id: UUID) -> EmploymentRecord | None: ...
     async def list_employment(self, tenant_id: UUID) -> list[EmploymentRecord]: ...

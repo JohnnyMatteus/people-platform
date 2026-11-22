@@ -40,6 +40,17 @@ class EmploymentRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class TenantSettings:
+    """Preparo do tenant vindo de TenantCriado: quais módulos o plano liga."""
+
+    tenant_id: UUID
+    slug: str
+    plan: str
+    analytics_enabled: bool
+    ai_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
 class CompetencyGap:
     competency: str
     gap: int

@@ -50,6 +50,13 @@ class ColaboradorDesligadoData(_Data):
     age_band: str = Field(pattern=r"^(<25|25-34|35-44|45-54|55\+|nao-informado)$")
 
 
+class TenantCriadoData(_Data):
+    slug: str
+    name: str
+    plan: str
+    features: list[str]
+
+
 class GapData(BaseModel):
     competency: str
     gap: int = Field(ge=0)

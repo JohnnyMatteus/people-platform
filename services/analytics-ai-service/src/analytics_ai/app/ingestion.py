@@ -15,6 +15,7 @@ from analytics_ai.domain.models import (
     NineBoxFact,
     SurveyFact,
     SurveySegment,
+    TenantSettings,
 )
 
 from .events import (
@@ -25,6 +26,7 @@ from .events import (
     Envelope,
     NineBoxCalibradoData,
     PesquisaClimaEncerradaData,
+    TenantCriadoData,
 )
 from .ports import ReadModelRepository
 
@@ -39,6 +41,7 @@ class EventIngestor:
     def __init__(self, repo: ReadModelRepository) -> None:
         self._repo = repo
         self._handlers: dict[str, Callable[[Envelope], Awaitable[None]]] = {
+            "TenantCriado": self._tenant_created,
             "CandidatoContratado": self._hired,
             "ColaboradorAtualizado": self._updated,
             "ColaboradorDesligado": self._terminated,
@@ -66,6 +69,18 @@ class EventIngestor:
                 f"{envelope.event_type} fora do contrato: {exc.error_count()} erro(s)"
             ) from exc
         return True
+
+    async def _tenant_created(self, e: Envelope) -> None:
+        d = TenantCriadoData.model_validate(e.data)
+        await self._repo.save_tenant_settings(
+            TenantSettings(
+                tenant_id=e.tenant_id,
+                slug=d.slug,
+                plan=d.plan,
+                analytics_enabled="analytics" in d.features,
+                ai_enabled="ai_assist" in d.features,
+            )
+        )
 
     async def _hired(self, e: Envelope) -> None:
         d = CandidatoContratadoData.model_validate(e.data)

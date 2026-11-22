@@ -11,7 +11,7 @@ from conftest import TENANT_A, TENANT_B, fixture
 
 SCHEMAS = Path(__file__).resolve().parents[3] / "contracts" / "asyncapi" / "schemas"
 NAMES = ["candidato-contratado", "avaliacao-concluida", "nine-box-calibrado", "pesquisa-clima-encerrada"]
-DIRECTORY = ["colaborador-atualizado", "colaborador-desligado"]
+DIRECTORY = ["colaborador-atualizado", "colaborador-desligado", "tenant-criado"]
 
 
 def _registry() -> Registry:
@@ -95,3 +95,12 @@ async def test_directory_event_rejects_personal_fields(repo):
     bad["data"]["birth_year"] = 1990
     with pytest.raises(InvalidEventError):
         await EventIngestor(repo).handle(bad)
+
+
+async def test_tenant_created_stores_settings_once_and_per_tenant(repo):
+    ing = EventIngestor(repo)
+    assert await ing.handle(fixture("tenant-criado")) is True
+    assert await ing.handle(fixture("tenant-criado")) is False
+    settings = await repo.get_tenant_settings(TENANT_A)
+    assert settings and settings.analytics_enabled and not settings.ai_enabled
+    assert await repo.get_tenant_settings(TENANT_B) is None

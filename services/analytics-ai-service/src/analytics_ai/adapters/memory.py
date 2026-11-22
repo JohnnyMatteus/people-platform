@@ -5,11 +5,18 @@ from __future__ import annotations
 from collections import defaultdict
 from uuid import UUID
 
-from analytics_ai.domain.models import AssessmentFact, EmploymentRecord, NineBoxFact, SurveyFact
+from analytics_ai.domain.models import (
+    AssessmentFact,
+    EmploymentRecord,
+    NineBoxFact,
+    SurveyFact,
+    TenantSettings,
+)
 
 
 class InMemoryRepository:
     def __init__(self) -> None:
+        self._settings: dict[UUID, TenantSettings] = {}
         self._events: dict[UUID, set[UUID]] = defaultdict(set)
         self._employment: dict[UUID, dict[UUID, EmploymentRecord]] = defaultdict(dict)
         self._assessments: dict[UUID, dict[UUID, AssessmentFact]] = defaultdict(dict)
@@ -21,6 +28,12 @@ class InMemoryRepository:
             return False
         self._events[tenant_id].add(event_id)
         return True
+
+    async def save_tenant_settings(self, settings: TenantSettings) -> None:
+        self._settings[settings.tenant_id] = settings
+
+    async def get_tenant_settings(self, tenant_id: UUID) -> TenantSettings | None:
+        return self._settings.get(tenant_id)
 
     async def upsert_employment(self, record: EmploymentRecord) -> None:
         self._employment[record.tenant_id][record.employee_id] = record

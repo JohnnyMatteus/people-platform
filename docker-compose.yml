@@ -224,6 +224,11 @@ services:
       S3_PRESIGN_ENDPOINT: http://localhost:${LOCALSTACK_PORT:-4566}
       ASSETS_PUBLIC_BASE_URL: http://localhost:${LOCALSTACK_PORT:-4566}/${S3_ASSETS_BUCKET:-people-platform-tenant-assets}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # Provisionador: TenantCriado vira a Organization do tenant no Keycloak (ADR 0013).
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: people
+      KEYCLOAK_PROVISIONER_CLIENT_ID: people-provisioner
+      KEYCLOAK_PROVISIONER_CLIENT_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:-dev-only-change-me}
       OTEL_SERVICE_NAME: tenant-service
     ports:
       - "${TENANT_SERVICE_PORT:-8081}:8080"

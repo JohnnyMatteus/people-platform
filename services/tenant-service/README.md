@@ -42,5 +42,14 @@ Para rodar localmente, `make up` na raiz do monorepo sobe Postgres, Kafka, Keycl
 | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | não | credenciais da cadeia padrão da AWS (no local, `test`/`test` do LocalStack) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | não | sem ela, os spans não são exportados |
 | `OUTBOX_POLL_INTERVAL`, `OUTBOX_BATCH_SIZE` | não (`1s`, `100`) | relay da outbox |
+| `KEYCLOAK_URL` | não | liga o provisionador: com ela, `TenantCriado` vira uma Organization no Keycloak |
+| `KEYCLOAK_PROVISIONER_CLIENT_SECRET` | com `KEYCLOAK_URL` | segredo do client de serviço `people-provisioner` (client credentials) |
+| `KEYCLOAK_REALM`, `KEYCLOAK_PROVISIONER_CLIENT_ID`, `TENANT_EVENTS_TOPIC`, `KAFKA_PROVISIONER_GROUP` | não | `people`, `people-provisioner`, `people.tenant.events.v1`, `tenant-service-keycloak-provisioner` |
+
+## Provisionador do Keycloak
+
+`internal/provisioning` consome `TenantCriado` e chama a porta `IdentityProvisioner`; o adaptador `internal/adapters/keycloak` usa a Admin REST API (Organizations, Keycloak 26). A Organization leva o `alias` igual ao slug e o atributo `tenant_id`, e a busca por esse atributo (`q=tenant_id:<uuid>`) torna a operação idempotente. Falha transitória reentrega a mensagem; recusa definitiva é descartada com log (`ErrPermanent`).
+
+**Não foi exercitado contra um Keycloak real.** Os endpoints e os campos de `OrganizationRepresentation` foram conferidos no `openapi.json` da Admin API publicada pelo Keycloak; o adaptador é testado contra um dublê HTTP local. Hipótese não confirmada: que o service account precisa dos papéis `manage-realm` e `view-realm` de `realm-management` (é o que o `realm-people.json` concede). Domínios de e-mail da Organization e a associação de usuários a ela ficam fora desta rodada.
 
 O contrato HTTP está em [`contracts/openapi/tenant-service.yaml`](../../contracts/openapi/tenant-service.yaml) e os eventos em [`contracts/asyncapi/people-platform.yaml`](../../contracts/asyncapi/people-platform.yaml).

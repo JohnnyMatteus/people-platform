@@ -312,6 +312,8 @@ jobs:
       - name: Testes (LLM falso, fixtures dos schemas e read models em Postgres real com RLS)
         env:
           ANALYTICS_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          # Sem isto os testes de Postgres (RLS e exclusão de titular) seriam pulados em silêncio se o banco faltasse.
+          ANALYTICS_REQUIRE_PG: "1"
         run: pytest -q -rs
       - name: Imagem Docker
         run: docker build -t people-platform/analytics-ai-service:ci .

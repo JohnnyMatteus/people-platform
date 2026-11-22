@@ -30,7 +30,15 @@ from analytics_ai.domain.models import (
 from conftest import TENANT_A, TENANT_B, fixture
 
 ADMIN = os.environ.get("ANALYTICS_PG_ADMIN_URL")
-pytestmark = pytest.mark.skipif(not ADMIN, reason="defina ANALYTICS_PG_ADMIN_URL com um Postgres disponível")
+# No CI (ANALYTICS_REQUIRE_PG=1) a ausência do banco é falha, não "pulado": um teste de segurança que pula não prova nada.
+REQUIRED = bool(os.environ.get("ANALYTICS_REQUIRE_PG"))
+pytestmark = pytest.mark.skipif(
+    not ADMIN and not REQUIRED, reason="defina ANALYTICS_PG_ADMIN_URL com um Postgres disponível"
+)
+
+
+def test_postgres_is_configured_when_required():
+    assert ADMIN, "ANALYTICS_REQUIRE_PG=1 exige ANALYTICS_PG_ADMIN_URL"
 
 
 def _with(url: str, *, user: str | None = None, password: str | None = None, db: str | None = None) -> str:
@@ -186,6 +194,19 @@ async def test_ingestor_deduplicates_and_a_failure_after_the_claim_rolls_it_back
     assert await repo.claim_event(TENANT_A, event_id) is True
 
 
+def _erasure(tenant, subject, event_id=None, request_id=None):
+    return {
+        "event_id": str(event_id or uuid.uuid4()),
+        "event_type": "TitularExclusaoSolicitada",
+        "event_version": 1,
+        "tenant_id": str(tenant),
+        "aggregate_id": str(subject),
+        "occurred_at": "2026-11-22T12:00:00Z",
+        "producer": "tenant-service",
+        "data": {"request_id": str(request_id or uuid.uuid4()), "subject_id": str(subject)},
+    }
+
+
 async def test_erase_subject_removes_only_the_subject_in_the_tenant(repo):
     cycle = await _seed(repo, TENANT_A)
     await _seed(repo, TENANT_B)
@@ -193,13 +214,77 @@ async def test_erase_subject_removes_only_the_subject_in_the_tenant(repo):
     # O mesmo employee_id gravado no tenant B: a exclusão pedida no A não pode alcançá-lo.
     await repo.upsert_employment(_employment(TENANT_B, subject))
     await repo.save_nine_box(NineBoxFact(TENANT_B, subject, cycle, "Q5"))
+    other = (await repo.list_employment(TENANT_A))[0]
+    other_subject = uuid.uuid4()
+    await repo.upsert_employment(_employment(TENANT_A, other_subject))
 
-    removed = await repo.erase_subject(TENANT_A, subject)
+    removed = await repo.erase_subject(TENANT_A, subject, uuid.uuid4())
 
     assert removed == 3  # vínculo, avaliação e nine box
     assert await repo.get_employment(TENANT_A, subject) is None
     assert await repo.latest_assessment(TENANT_A, subject) is None
     assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await repo.get_employment(TENANT_A, other_subject) is not None  # outro titular do mesmo tenant
     assert await repo.get_employment(TENANT_B, subject) is not None
     assert len(await repo.list_nine_box(TENANT_B, cycle)) == 1
-    assert await repo.erase_subject(TENANT_A, subject) == 0  # idempotente
+    assert await repo.erase_subject(TENANT_A, subject, uuid.uuid4()) == 0  # idempotente
+    assert other.employee_id != other_subject
+
+
+async def test_application_role_cannot_delete_directly_and_the_function_needs_a_tenant_scope(repo):
+    await _seed(repo, TENANT_A)
+    pool = repo._pool
+    for table in (
+        "employment_records",
+        "assessment_facts",
+        "nine_box_facts",
+        "erased_subjects",
+        "processed_events",
+    ):
+        async with pool.acquire() as conn:
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                async with conn.transaction():
+                    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(TENANT_A))
+                    await conn.execute(f"DELETE FROM {table}")  # noqa: S608
+    # Sem escopo de tenant a função recusa, em vez de apagar de todos.
+    async with pool.acquire() as conn:
+        with pytest.raises(asyncpg.RaiseError, match="escopo de tenant"):
+            async with conn.transaction():
+                await conn.execute("SELECT erase_subject($1, $2)", uuid.uuid4(), uuid.uuid4())
+    # E o papel da aplicação não consegue gravar lápide à mão.
+    async with pool.acquire() as conn:
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            async with conn.transaction():
+                await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(TENANT_A))
+                await conn.execute(
+                    "INSERT INTO erased_subjects (tenant_id, subject_id, request_id) VALUES ($1, $2, $3)",
+                    TENANT_A,
+                    uuid.uuid4(),
+                    uuid.uuid4(),
+                )
+
+
+async def test_erasure_event_through_the_ingestor_is_idempotent_and_blocks_late_events(repo):
+    ing = EventIngestor(repo)
+    nine_box = fixture("nine-box-calibrado")
+    employee = uuid.UUID(nine_box["data"]["employee_id"])
+    cycle = uuid.UUID(nine_box["data"]["cycle_id"])
+    assert await ing.handle(nine_box) is True
+    assert await ing.handle(fixture("avaliacao-concluida")) is True
+
+    event = _erasure(TENANT_A, employee)
+    assert await ing.handle(event) is True
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await repo.latest_assessment(TENANT_A, employee) is None
+    assert await ing.handle(event) is False  # reentrega: no-op
+
+    # Ressurreição: evento atrasado, replay ou de outro tópico não recria o dado do titular apagado.
+    late = {**nine_box, "event_id": str(uuid.uuid4())}
+    assert await ing.handle(late) is True  # o evento é consumido, mas o projetor o ignora
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await ing.handle({**fixture("avaliacao-concluida"), "event_id": str(uuid.uuid4())}) is True
+    assert await repo.latest_assessment(TENANT_A, employee) is None
+    # A lápide vale só no tenant do pedido.
+    other_tenant = {**nine_box, "event_id": str(uuid.uuid4()), "tenant_id": str(TENANT_B)}
+    assert await ing.handle(other_tenant) is True
+    assert len(await repo.list_nine_box(TENANT_B, cycle)) == 1

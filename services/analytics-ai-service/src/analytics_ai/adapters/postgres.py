@@ -166,16 +166,19 @@ class _TxRepository:
             tuple(SurveySegment(s["segment_key"], s["respondents"], s["scores"]) for s in segments),
         )
 
-    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
-        removed = 0
-        for table in ("employment_records", "assessment_facts", "nine_box_facts"):
-            tag = await self._c.execute(
-                f"DELETE FROM {table} WHERE tenant_id = $1 AND employee_id = $2",  # noqa: S608 - nomes fixos, sem entrada externa
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID, request_id: UUID) -> int:
+        # A única via de exclusão: o papel da aplicação não tem DELETE; a função age só no tenant do escopo.
+        removed = await self._c.fetchval("SELECT erase_subject($1, $2)", subject_id, request_id)
+        return int(removed)
+
+    async def is_erased(self, tenant_id: UUID, subject_id: UUID) -> bool:
+        return bool(
+            await self._c.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM erased_subjects WHERE tenant_id = $1 AND subject_id = $2)",
                 tenant_id,
                 subject_id,
             )
-            removed += int(tag.rsplit(" ", 1)[-1])
-        return removed
+        )
 
 
 class PostgresRepository:
@@ -256,6 +259,10 @@ class PostgresRepository:
         async with self.unit_of_work(tenant_id) as tx:
             return await tx.get_survey(tenant_id, survey_id)
 
-    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID, request_id: UUID) -> int:
         async with self.unit_of_work(tenant_id) as tx:
-            return await tx.erase_subject(tenant_id, subject_id)
+            return await tx.erase_subject(tenant_id, subject_id, request_id)
+
+    async def is_erased(self, tenant_id: UUID, subject_id: UUID) -> bool:
+        async with self.unit_of_work(tenant_id) as tx:
+            return await tx.is_erased(tenant_id, subject_id)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -88,6 +89,8 @@ class EventIngestor:
 
     async def _hired(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = CandidatoContratadoData.model_validate(e.data)
+        if await self._ignored(repo, e, d.application_id):
+            return
         # O evento não traz área nem demografia (minimização); ficam como não informado.
         await repo.upsert_employment(
             EmploymentRecord(
@@ -97,6 +100,8 @@ class EventIngestor:
 
     async def _updated(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = ColaboradorAtualizadoData.model_validate(e.data)
+        if await self._ignored(repo, e, d.employee_id):
+            return
         current = await repo.get_employment(e.tenant_id, d.employee_id)
         await repo.upsert_employment(
             EmploymentRecord(
@@ -112,6 +117,8 @@ class EventIngestor:
 
     async def _terminated(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = ColaboradorDesligadoData.model_validate(e.data)
+        if await self._ignored(repo, e, d.employee_id):
+            return
         current = await repo.get_employment(e.tenant_id, d.employee_id)
         # Desligamento chegando antes da atualização (ordem não garantida entre tópicos) cria o vínculo
         # com a data de desligamento como admissão provisória; a próxima atualização corrige hired_on.
@@ -129,11 +136,15 @@ class EventIngestor:
 
     async def _assessment(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = AvaliacaoConcluidaData.model_validate(e.data)
+        if await self._ignored(repo, e, d.employee_id):
+            return
         gaps = tuple(CompetencyGap(g.competency, g.gap) for g in d.competency_gaps)
         await repo.save_assessment(AssessmentFact(e.tenant_id, d.employee_id, d.cycle_id, gaps))
 
     async def _nine_box(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = NineBoxCalibradoData.model_validate(e.data)
+        if await self._ignored(repo, e, d.employee_id):
+            return
         await repo.save_nine_box(NineBoxFact(e.tenant_id, d.employee_id, d.cycle_id, d.quadrant))
 
     async def _survey(self, repo: ReadModelRepository, e: Envelope) -> None:
@@ -141,13 +152,27 @@ class EventIngestor:
         segments = tuple(SurveySegment(s.segment_key, s.respondents, s.scores) for s in d.segments)
         await repo.save_survey(SurveyFact(e.tenant_id, d.survey_id, d.min_group_size, segments))
 
+    @staticmethod
+    async def _ignored(repo: ReadModelRepository, e: Envelope, subject: UUID) -> bool:
+        """Titular com lápide: o evento chegou depois do pedido de exclusão e não pode recriar o dado."""
+        if await repo.is_erased(e.tenant_id, subject):
+            log.info(
+                "evento sobre titular apagado ignorado",
+                extra={"event_type": e.event_type, "tenant_id": str(e.tenant_id)},
+            )
+            return True
+        return False
+
     async def _erase_subject(self, repo: ReadModelRepository, e: Envelope) -> None:
         """LGPD: apaga o que o serviço projetou sobre o titular, só no tenant do evento (mesma transação do claim).
+
+        subject_id é tratado como employee_id (o `sub` do colaborador) e também alcança o vínculo provisório criado por
+        CandidatoContratado, que usa application_id como employee_id. Não há vínculo entre candidato e colaborador.
 
         Os agregados já publicados (turnover, nine box por quadrante) são recalculados dos read models na leitura,
         então deixam de contar a pessoa; não há cópia derivada para limpar."""
         d = TitularExclusaoSolicitadaData.model_validate(e.data)
-        removed = await repo.erase_subject(e.tenant_id, d.subject_id)
+        removed = await repo.erase_subject(e.tenant_id, d.subject_id, d.request_id)
         log.info(
             "exclusão de titular aplicada",
             extra={"request_id": str(d.request_id), "tenant_id": str(e.tenant_id), "removed": removed},

@@ -31,8 +31,11 @@ class ReadModelRepository(Protocol):
     async def save_survey(self, fact: SurveyFact) -> None: ...
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None: ...
 
-    async def erase_subject(self, tenant_id: UUID, subject_id: UUID) -> int:
-        """Apaga vínculo, avaliação e nine box do titular neste tenant. Devolve quantas linhas apagou."""
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID, request_id: UUID) -> int:
+        """Apaga vínculo, avaliação e nine box do titular neste tenant e grava a lápide. Devolve quantas linhas apagou."""
+
+    async def is_erased(self, tenant_id: UUID, subject_id: UUID) -> bool:
+        """Há lápide para o titular: os projetores ignoram dados novos sobre ele."""
 
 
 class UnitOfWork(Protocol):

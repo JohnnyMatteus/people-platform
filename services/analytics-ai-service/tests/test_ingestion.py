@@ -195,3 +195,21 @@ async def test_erasure_event_fora_do_contrato_is_invalid(repo):
     bad["data"] = {"subject_id": "nao-e-uuid"}
     with pytest.raises(InvalidEventError):
         await EventIngestor(repo).handle(bad)
+
+
+async def test_late_event_after_erasure_does_not_resurrect_the_subject(repo):
+    from uuid import uuid4
+
+    ing = EventIngestor(repo)
+    nine_box = fixture("nine-box-calibrado")
+    employee = UUID(nine_box["data"]["employee_id"])
+    cycle = UUID(nine_box["data"]["cycle_id"])
+
+    # A exclusão chega ANTES dos dados (não há ordem entre tópicos).
+    assert await ing.handle(_erasure(TENANT_A, employee, uuid4())) is True
+    assert await ing.handle(nine_box) is True  # consumido, mas ignorado pelo projetor
+    assert await ing.handle(fixture("avaliacao-concluida")) is True
+    assert await ing.handle(fixture("candidato-contratado")) is True  # outra pessoa: continua projetando
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await repo.latest_assessment(TENANT_A, employee) is None
+    assert len(await repo.list_employment(TENANT_A)) == 1

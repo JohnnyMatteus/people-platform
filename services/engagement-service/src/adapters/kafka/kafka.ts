@@ -51,8 +51,15 @@ export class GamificationConsumer {
     await this.consumer.subscribe({ topic: TOPIC_ENGAGEMENT_EVENTS, fromBeginning: true });
     await this.consumer.run({
       eachMessage: async ({ message }) => {
-        const env = JSON.parse(message.value?.toString() ?? '{}') as ElogioPublicadoEnvelope;
-        if (env.event_type !== 'ElogioPublicado') return;
+        let env: ElogioPublicadoEnvelope;
+        try {
+          env = JSON.parse(message.value?.toString() ?? '{}') as ElogioPublicadoEnvelope;
+        } catch {
+          this.log.warn('mensagem de gamificação com JSON inválido descartada');
+          return;
+        }
+        // `null` é JSON válido e não tem campos.
+        if (env?.event_type !== 'ElogioPublicado') return;
         if (!env.event_id || !env.tenant_id || !env.data?.from_employee_id || !Array.isArray(env.data.to_employee_ids)) {
           // Fora do contrato: repetir não adianta e travaria a partição (como o consumidor de tenants, descarta com aviso).
           this.log.warn('ElogioPublicado fora do contrato descartado');

@@ -167,11 +167,18 @@ private fun CalibrationAdjustment.toOut() =
     AdjustmentOut(employeeId.value, from, to, calibratedBy.value, justification, at)
 
 private fun SessionView.toOut() = SessionOut(
-    id, cycleId, status, policy.toBody(),
+    id,
+    cycleId,
+    status,
+    policy.toBody(),
     placements.map {
         PlacementOut(
-            it.employeeId, it.employeeName, it.performanceScore.toPlainString(), it.potentialScore.toPlainString(),
-            it.original, it.current,
+            it.employeeId,
+            it.employeeName,
+            it.performanceScore.toPlainString(),
+            it.potentialScore.toPlainString(),
+            it.original,
+            it.current,
         )
     },
     distribution.mapKeys { it.key.name },
@@ -275,7 +282,8 @@ class CycleController(private val cycles: CycleService, private val evaluations:
         @RequestBody body: SelfEvaluationBody,
     ): EvaluationView =
         evaluations.submitSelf(
-            jwt.caller(), cycleId,
+            jwt.caller(),
+            cycleId,
             EvaluationInput(null, body.performanceScore, null, body.competencies, body.comment),
         )
 
@@ -287,7 +295,8 @@ class CycleController(private val cycles: CycleService, private val evaluations:
         @RequestBody body: ManagerEvaluationBody,
     ): EvaluationView =
         evaluations.submitManager(
-            jwt.caller(), cycleId,
+            jwt.caller(),
+            cycleId,
             EvaluationInput(
                 body.employeeId,
                 body.performanceScore,

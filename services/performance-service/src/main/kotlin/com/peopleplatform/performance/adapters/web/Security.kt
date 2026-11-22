@@ -82,7 +82,9 @@ class SecurityConfig {
         val decoder = NimbusJwtDecoder.withJwkSetUri(jwksUri).build()
         decoder.setJwtValidator(
             org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator(
-                JwtValidators.createDefaultWithIssuer(issuer), AudienceValidator(audience), TenantClaimValidator(),
+                JwtValidators.createDefaultWithIssuer(issuer),
+                AudienceValidator(audience),
+                TenantClaimValidator(),
             ),
         )
         return decoder

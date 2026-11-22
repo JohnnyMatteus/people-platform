@@ -83,9 +83,21 @@ class CalibrationService(
         if (assessments.isEmpty()) throw ConflictException("nenhuma avaliação consolidada neste ciclo")
 
         val session = SessionEntity(
-            UUID.randomUUID(), caller.tenantId.value, cycleId, "open",
-            BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
-            1, BigDecimal.ONE, 0, clock.instant(), null,
+            UUID.randomUUID(),
+            caller.tenantId.value,
+            cycleId,
+            "open",
+            BigDecimal.ONE,
+            BigDecimal.ONE,
+            BigDecimal.ONE,
+            BigDecimal.ONE,
+            BigDecimal.ONE,
+            BigDecimal.ONE,
+            1,
+            BigDecimal.ONE,
+            0,
+            clock.instant(),
+            null,
         )
         session.copyFrom(policies.current(caller))
         sessions.save(session)
@@ -114,8 +126,15 @@ class CalibrationService(
             val adjustment = domain.adjust(EmployeeId(employee), to, caller.employeeId, justification, clock.instant())
             adjustments.save(
                 AdjustmentEntity(
-                    UUID.randomUUID(), caller.tenantId.value, id, employee, adjustment.from.name, to.name,
-                    caller.employeeId.value, adjustment.justification, adjustment.at,
+                    UUID.randomUUID(),
+                    caller.tenantId.value,
+                    id,
+                    employee,
+                    adjustment.from.name,
+                    to.name,
+                    caller.employeeId.value,
+                    adjustment.justification,
+                    adjustment.at,
                 ),
             )
             adjustment
@@ -136,7 +155,10 @@ class CalibrationService(
                 ),
             )
             events.publish(
-                caller.tenantId, "calibration", e.employeeId.value, "NineBoxCalibrado",
+                caller.tenantId,
+                "calibration",
+                e.employeeId.value,
+                "NineBoxCalibrado",
                 mapOf(
                     "cycle_id" to e.cycleId.value.toString(),
                     "employee_id" to e.employeeId.value.toString(),
@@ -188,8 +210,11 @@ class CalibrationService(
 
     private fun scores(self: EvaluationEntity, manager: EvaluationEntity): Pair<BigDecimal, BigDecimal> {
         val result = EvaluationConsolidator.consolidate(
-            self.performanceScore, evaluationService.competenciesOf(self), manager.performanceScore,
-            manager.potentialScore ?: BigDecimal.ZERO, evaluationService.competenciesOf(manager),
+            self.performanceScore,
+            evaluationService.competenciesOf(self),
+            manager.performanceScore,
+            manager.potentialScore ?: BigDecimal.ZERO,
+            evaluationService.competenciesOf(manager),
         )
         return result.performance to result.potential
     }
@@ -225,13 +250,23 @@ class CalibrationService(
         val rows = placements.findBySessionId(entity.id).map {
             val id = EmployeeId(it.employeeId)
             PlacementView(
-                it.employeeId, names[it.employeeId] ?: "Colaborador", it.performanceScore, it.potentialScore,
-                domain.originalOf(id), domain.currentOf(id),
+                it.employeeId,
+                names[it.employeeId] ?: "Colaborador",
+                it.performanceScore,
+                it.potentialScore,
+                domain.originalOf(id),
+                domain.currentOf(id),
             )
         }.sortedBy { it.employeeName }
         return SessionView(
-            entity.id, entity.cycleId, entity.status, entity.toDomain(caller.tenantId), rows,
-            domain.distribution(), domain.warnings(), domain.adjustments,
+            entity.id,
+            entity.cycleId,
+            entity.status,
+            entity.toDomain(caller.tenantId),
+            rows,
+            domain.distribution(),
+            domain.warnings(),
+            domain.adjustments,
         )
     }
 }

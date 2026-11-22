@@ -79,8 +79,17 @@ class PolicyService(private val scope: TenantScope, private val policies: Policy
     fun set(caller: Caller, policy: NineBoxPolicy): NineBoxPolicy = scope.run(caller.tenantId) {
         val entity = policies.findById(caller.tenantId.value).orElse(null)
             ?: PolicyEntity(
-                caller.tenantId.value, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
-                BigDecimal.ONE, BigDecimal.ONE, 1, BigDecimal.ONE, 0, clock.instant(),
+                caller.tenantId.value,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                1,
+                BigDecimal.ONE,
+                0,
+                clock.instant(),
             )
         entity.copyFrom(policy.copy(tenantId = caller.tenantId))
         entity.updatedAt = clock.instant()
@@ -240,8 +249,15 @@ class EvaluationService(
             ),
         )
         return EvaluationView(
-            entity.id, cycleId, employee, wire, performance.toPlainString(), potential?.toPlainString(),
-            input.competencies, entity.comment, entity.submittedAt,
+            entity.id,
+            cycleId,
+            employee,
+            wire,
+            performance.toPlainString(),
+            potential?.toPlainString(),
+            input.competencies,
+            entity.comment,
+            entity.submittedAt,
         )
     }
 
@@ -250,11 +266,17 @@ class EvaluationService(
         val self = evaluations.findByCycleIdAndEmployeeIdAndKind(cycleId, employee, "self") ?: return
         val manager = evaluations.findByCycleIdAndEmployeeIdAndKind(cycleId, employee, "manager") ?: return
         val result = EvaluationConsolidator.consolidate(
-            self.performanceScore, competenciesOf(self), manager.performanceScore,
-            manager.potentialScore ?: return, competenciesOf(manager),
+            self.performanceScore,
+            competenciesOf(self),
+            manager.performanceScore,
+            manager.potentialScore ?: return,
+            competenciesOf(manager),
         )
         events.publish(
-            caller.tenantId, "evaluation", employee, "AvaliacaoConcluida",
+            caller.tenantId,
+            "evaluation",
+            employee,
+            "AvaliacaoConcluida",
             mapOf(
                 "cycle_id" to cycleId.toString(),
                 "employee_id" to employee.toString(),

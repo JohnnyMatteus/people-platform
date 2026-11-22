@@ -121,7 +121,10 @@ class SuccessionService(
     private fun plan(caller: Caller, entity: PositionEntity, names: Map<UUID, String>): PlanView {
         val domain = rebuild(caller, entity)
         return PlanView(
-            entity.id, entity.title, entity.incumbentId, entity.incumbentId?.let { names[it] },
+            entity.id,
+            entity.title,
+            entity.incumbentId,
+            entity.incumbentId?.let { names[it] },
             domain.benchStrength(),
             domain.ranked.map {
                 SuccessorView(it.employeeId.value, names[it.employeeId.value] ?: "Colaborador", it.readiness)
@@ -159,7 +162,9 @@ class PdiService(
     fun get(caller: Caller, employee: UUID): PdiView = scope.run(caller.tenantId) {
         authorize(caller, employee)
         PdiView(
-            employee, latestGaps(employee), actions.findByEmployeeIdOrderByDueOnAsc(employee).map { it.view() },
+            employee,
+            latestGaps(employee),
+            actions.findByEmployeeIdOrderByDueOnAsc(employee).map { it.view() },
             PdiAdvisor.suggest(
                 latestGaps(employee),
                 history.findByEmployeeIdOrderByClosedAtAsc(employee).lastOrNull()?.let {
@@ -220,8 +225,11 @@ class PdiService(
         } ?: return emptyList()
         val (self, manager) = pair
         return EvaluationConsolidator.consolidate(
-            self.performanceScore, evaluationService.competenciesOf(self), manager.performanceScore,
-            manager.potentialScore ?: manager.performanceScore, evaluationService.competenciesOf(manager),
+            self.performanceScore,
+            evaluationService.competenciesOf(self),
+            manager.performanceScore,
+            manager.potentialScore ?: manager.performanceScore,
+            evaluationService.competenciesOf(manager),
         ).gaps
     }
 

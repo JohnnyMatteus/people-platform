@@ -46,11 +46,15 @@ object PdiAdvisor {
 
     private fun fromQuadrant(q: Quadrant): PdiSuggestion? = when {
         q.performance == Level.LOW -> PdiSuggestion(
-            "Plano de recuperação de entregas com o gestor", null, PdiActionKind.PROJECT,
+            "Plano de recuperação de entregas com o gestor",
+            null,
+            PdiActionKind.PROJECT,
             "Nine box em ${q.name} (${q.label}): desempenho abaixo do esperado.",
         )
         q.potential == Level.HIGH -> PdiSuggestion(
-            "Projeto de escopo ampliado ou mentoria de liderança", null, PdiActionKind.PROJECT,
+            "Projeto de escopo ampliado ou mentoria de liderança",
+            null,
+            PdiActionKind.PROJECT,
             "Nine box em ${q.name} (${q.label}): potencial alto pede desafio maior.",
         )
         else -> null

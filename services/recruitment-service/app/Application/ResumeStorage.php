@@ -13,4 +13,7 @@ interface ResumeStorage
     public function uploadUrl(string $tenantId, string $key, string $contentType): array;
 
     public function downloadUrl(string $tenantId, string $key): string;
+
+    /** Apaga o objeto. Apagar uma chave que não existe não é erro (o S3 também não reclama). */
+    public function delete(string $tenantId, string $key): void;
 }

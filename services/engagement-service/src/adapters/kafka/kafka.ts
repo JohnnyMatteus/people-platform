@@ -1,8 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { Kafka, logLevel } from 'kafkajs';
 import type { GamificationService, ElogioPublicadoEnvelope } from '../../app/gamification-service';
+import type { PrivacyService } from '../../app/privacy-service';
 import type { TenantProvisioningService } from '../../app/tenant-provisioning-service';
 import { TOPIC_ENGAGEMENT_EVENTS } from '../../domain/events';
+import { TOPIC_PRIVACY_EVENTS, type ErasureRequestedEnvelope } from '../../domain/privacy';
 import { TOPIC_TENANT_EVENTS, type TenantCriadoEnvelope } from '../../domain/tenant-settings';
 import type { EventPublisher } from '../postgres/outbox-relay';
 
@@ -51,6 +53,11 @@ export class GamificationConsumer {
       eachMessage: async ({ message }) => {
         const env = JSON.parse(message.value?.toString() ?? '{}') as ElogioPublicadoEnvelope;
         if (env.event_type !== 'ElogioPublicado') return;
+        if (!env.event_id || !env.tenant_id || !env.data?.from_employee_id || !Array.isArray(env.data.to_employee_ids)) {
+          // Fora do contrato: repetir não adianta e travaria a partição (como o consumidor de tenants, descarta com aviso).
+          this.log.warn('ElogioPublicado fora do contrato descartado');
+          return;
+        }
         // Se lançar, o kafkajs reentrega; o razão de pontos é idempotente.
         await this.gamification.onPraisePublished(env);
       },
@@ -97,6 +104,48 @@ export class TenantEventsConsumer {
       },
     });
     this.log.log('consumidor de TenantCriado ativo');
+  }
+
+  stop() {
+    return this.consumer.disconnect();
+  }
+}
+
+/** Lê TitularExclusaoSolicitada (LGPD) e apaga os dados do titular no tenant do evento. */
+export class PrivacyEventsConsumer {
+  private readonly log = new Logger(PrivacyEventsConsumer.name);
+  private readonly consumer;
+
+  constructor(
+    kafka: Kafka,
+    private readonly privacy: PrivacyService,
+  ) {
+    this.consumer = kafka.consumer({ groupId: 'engagement-privacy' });
+  }
+
+  async start() {
+    await this.consumer.connect();
+    await this.consumer.subscribe({ topic: TOPIC_PRIVACY_EVENTS, fromBeginning: true });
+    await this.consumer.run({
+      eachMessage: async ({ message }) => {
+        let env: ErasureRequestedEnvelope;
+        try {
+          env = JSON.parse(message.value?.toString() ?? '{}') as ErasureRequestedEnvelope;
+        } catch {
+          this.log.warn('mensagem de privacidade com JSON inválido descartada');
+          return;
+        }
+        if (env.event_type !== 'TitularExclusaoSolicitada') return;
+        if (env.event_version !== 1 || !env.tenant_id || !env.event_id || !env.data?.subject_id) {
+          this.log.warn('TitularExclusaoSolicitada fora do contrato descartado');
+          return;
+        }
+        // Se lançar, o kafkajs reentrega; claim e apagamento na mesma transação tornam o reprocessamento seguro.
+        const applied = await this.privacy.onErasureRequested(env);
+        if (applied) this.log.log(`exclusão de titular aplicada (pedido ${env.data.request_id})`);
+      },
+    });
+    this.log.log('consumidor de exclusão de titular ativo');
   }
 
   stop() {

@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Client, Pool } from 'pg';
 import { GamificationService } from '../../src/app/gamification-service';
+import { OneOnOneService } from '../../src/app/one-on-one-service';
+import { PrivacyService } from '../../src/app/privacy-service';
 import { SocialService } from '../../src/app/social-service';
 import { SurveyService } from '../../src/app/survey-service';
 import { migrate } from '../../src/adapters/postgres/migrate';
@@ -238,5 +240,85 @@ describe('outbox e gamificação idempotente', () => {
     await g.onPraisePublished(e);
     await g.onPraisePublished(e);
     expect((await g.mine(principal(CARLA, TENANT_B))).balance).toBe(10);
+  });
+});
+
+describe('exclusão de titular no Postgres real, com o papel da aplicação', () => {
+  const asAppRole = async (tenant: string, sql: string, params: unknown[] = []) => scoped(tenant, (c) => c.query(sql, params));
+  const erasure = (tenant: string, subject: string, eventId = randomUUID()) => ({
+    event_id: eventId,
+    event_type: 'TitularExclusaoSolicitada',
+    event_version: 1,
+    tenant_id: tenant,
+    data: { request_id: randomUUID(), subject_id: subject },
+  });
+  const count = async (tenant: string, table: string, column: string, id: string) =>
+    Number((await asAppRole(tenant, `SELECT count(*)::int AS n FROM ${table} WHERE ${column} = $1`, [id])).rows[0].n);
+
+  it('o papel da aplicação não apaga direto; a função exige escopo e não é chamável por PUBLIC', async () => {
+    for (const table of ['feedbacks', 'praises', 'one_on_ones', 'points_ledger', 'badges', 'posts', 'read_receipts', 'survey_participation', 'erased_subjects']) {
+      await expect(asAppRole(TENANT_A, `DELETE FROM ${table}`)).rejects.toThrow(/permission denied/);
+    }
+    await expect(asAppRole(TENANT_A, 'INSERT INTO erased_subjects (tenant_id, subject_id, request_id) VALUES ($1, $2, $3)', [TENANT_A, randomUUID(), randomUUID()])).rejects.toThrow(
+      /permission denied/,
+    );
+    await expect(scoped(null, (c) => c.query('SELECT erase_subject($1::uuid, $2::uuid)', [randomUUID(), randomUUID()]))).rejects.toThrow(/escopo de tenant/);
+    const { rows } = await pool.query(
+      "SELECT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a WHERE p.proname = 'erase_subject' AND a.grantee = 0 AND a.privilege_type = 'EXECUTE') AS public_can",
+    );
+    expect(rows[0].public_can).toBe(false);
+  });
+
+  it('apaga o titular, preserva outro titular e o mesmo id em outro tenant, reentrega é no-op e a lápide impede a ressurreição', async () => {
+    const d = depsFor(store);
+    const social = new SocialService(d);
+    const gamification = new GamificationService(d);
+    const subject = randomUUID();
+    const bystander = randomUUID();
+    for (const tenant of [TENANT_A, TENANT_B]) {
+      await social.giveFeedback(principal(subject, tenant), bystander, 'bom trabalho');
+      await social.giveFeedback(principal(bystander, tenant), subject, 'obrigado');
+      // Sem o titular em nenhuma ponta: é o que precisa sobreviver à exclusão.
+      await social.giveFeedback(principal(bystander, tenant), CARLA, 'boa entrega');
+      await social.praise(principal(subject, tenant), [bystander], 'valeu', []);
+      await social.praise(principal(bystander, tenant), [subject, CARLA], 'ótimo time', []);
+      await new OneOnOneService(d).schedule(principal(subject, tenant, ['manager']), bystander, new Date('2026-12-01T10:00:00Z'));
+      const post = await social.publishPost(principal(subject, tenant, ['manager']), 'Aviso', 'texto');
+      await social.confirmRead(principal(bystander, tenant), post.id);
+    }
+    const outbox = await store.asPlatform((c) =>
+      // Outros testes deste arquivo gravam ElogioPublicado com payload vazio; só os de elogio de verdade entram aqui.
+      c.query("SELECT id, tenant_id, payload FROM outbox WHERE event_type = 'ElogioPublicado' AND payload ? 'to_employee_ids'"),
+    );
+    for (const e of outbox.rows) {
+      await gamification.onPraisePublished({ event_id: e.id, event_type: 'ElogioPublicado', tenant_id: e.tenant_id, data: e.payload });
+    }
+    expect(await count(TENANT_A, 'feedbacks', 'from_id', subject)).toBeGreaterThan(0);
+
+    const privacy = new PrivacyService(d);
+    const event = erasure(TENANT_A, subject);
+    expect(await privacy.onErasureRequested(event)).toBe(true);
+
+    for (const [table, column] of [['feedbacks', 'from_id'], ['feedbacks', 'to_id'], ['praises', 'from_id'], ['one_on_ones', 'leader_id'], ['points_ledger', 'employee_id'], ['posts', 'author_id']] as const) {
+      expect(await count(TENANT_A, table, column, subject)).toBe(0);
+    }
+    expect(Number((await asAppRole(TENANT_A, 'SELECT count(*)::int AS n FROM praises WHERE $1 = ANY(to_ids)', [subject])).rows[0].n)).toBe(0);
+    // O elogio recebido junto com a Carla continua, só sem o nome do titular.
+    expect((await asAppRole(TENANT_A, 'SELECT to_ids FROM praises WHERE from_id = $1', [bystander])).rows[0].to_ids).toEqual([CARLA]);
+    // Outro titular do mesmo tenant e o mesmo id no outro tenant ficam intactos.
+    expect(await count(TENANT_A, 'feedbacks', 'from_id', bystander)).toBeGreaterThan(0);
+    expect(await count(TENANT_B, 'feedbacks', 'from_id', subject)).toBeGreaterThan(0);
+    expect(await count(TENANT_B, 'points_ledger', 'employee_id', subject)).toBeGreaterThan(0);
+
+    expect(await privacy.onErasureRequested(event)).toBe(false);
+
+    // Ressurreição: elogio e leitura que chegam depois do pedido não recriam pontos do titular apagado.
+    await social.praise(principal(bystander, TENANT_A), [subject], 'tarde demais', []);
+    const late = await store.asPlatform((c) =>
+      c.query("SELECT id, tenant_id, payload FROM outbox WHERE event_type = 'ElogioPublicado' AND tenant_id = $1 AND payload->'to_employee_ids' = to_jsonb(ARRAY[$2::text])", [TENANT_A, subject]),
+    );
+    await gamification.onPraisePublished({ event_id: late.rows[0].id, event_type: 'ElogioPublicado', tenant_id: TENANT_A, data: late.rows[0].payload });
+    expect(await count(TENANT_A, 'points_ledger', 'employee_id', subject)).toBe(0);
+    expect(await count(TENANT_A, 'badges', 'employee_id', subject)).toBe(0);
   });
 });

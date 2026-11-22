@@ -11,8 +11,11 @@ import (
 	"github.com/JohnnyMatteus/people-platform/services/learning-service/internal/domain"
 )
 
-// EventCandidatoContratado é o tipo do evento do recruitment-service que dispara a integração.
-const EventCandidatoContratado = "CandidatoContratado"
+// Tipos de evento que o serviço consome.
+const (
+	EventCandidatoContratado       = "CandidatoContratado"
+	EventTitularExclusaoSolicitada = "TitularExclusaoSolicitada"
+)
 
 type envelope struct {
 	EventID      uuid.UUID       `json:"event_id"`
@@ -29,7 +32,7 @@ type hiredData struct {
 	StartDate     string    `json:"start_date"`
 }
 
-// HandleEvent consome uma mensagem do tópico do recrutamento. Devolve true se produziu efeito e false se a mensagem
+// HandleEvent consome uma mensagem dos tópicos de recrutamento e de privacidade. Devolve true se produziu efeito e false se a mensagem
 // era repetida ou de outro tipo. Mensagem malformada devolve erro (o consumidor decide o que fazer, ver adapters/kafka).
 // A entrega do Kafka é pelo menos uma vez: a deduplicação por event_id e o efeito saem na mesma transação do tenant
 // do próprio evento.
@@ -38,11 +41,14 @@ func (s *Service) HandleEvent(ctx context.Context, raw []byte) (bool, error) {
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return false, fmt.Errorf("%w: envelope: %v", domain.ErrInvalidInput, err)
 	}
-	if env.EventType != EventCandidatoContratado {
+	if env.EventType != EventCandidatoContratado && env.EventType != EventTitularExclusaoSolicitada {
 		return false, nil
 	}
 	if env.EventVersion != 1 || env.EventID == uuid.Nil || env.TenantID == uuid.Nil {
 		return false, fmt.Errorf("%w: evento sem versão 1, event_id ou tenant_id", domain.ErrInvalidInput)
+	}
+	if env.EventType == EventTitularExclusaoSolicitada {
+		return s.eraseSubject(ctx, env)
 	}
 	var d hiredData
 	if err := json.Unmarshal(env.Data, &d); err != nil || d.ApplicationID == uuid.Nil {
@@ -64,6 +70,35 @@ func (s *Service) HandleEvent(ctx context.Context, raw []byte) (bool, error) {
 		})
 		applied = inserted
 		return err
+	})
+	return applied, err
+}
+
+type erasureData struct {
+	RequestID uuid.UUID `json:"request_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+}
+
+// eraseSubject apaga o que o serviço guarda sobre o titular no tenant do evento: matrículas, progresso e as atribuições
+// de integração já vinculadas a ele, e grava a lápide. subject_id é o colaborador (o `sub` do token, employee_id aqui);
+// o serviço não guarda candidatos. É idempotente (claim por event_id) e só toca o tenant do envelope.
+func (s *Service) eraseSubject(ctx context.Context, env envelope) (bool, error) {
+	var d erasureData
+	if err := json.Unmarshal(env.Data, &d); err != nil || d.SubjectID == uuid.Nil {
+		return false, fmt.Errorf("%w: dados de TitularExclusaoSolicitada", domain.ErrInvalidInput)
+	}
+	applied := false
+	err := s.store.InTenant(ctx, env.TenantID, func(tx Tx) error {
+		first, err := tx.ProcessedEvents().Claim(ctx, env.EventID, env.EventType, s.now())
+		if err != nil || !first {
+			return err
+		}
+		removed, err := tx.Privacy().EraseSubject(ctx, d.SubjectID, d.RequestID)
+		if err != nil {
+			return err
+		}
+		applied = removed > 0
+		return nil
 	})
 	return applied, err
 }

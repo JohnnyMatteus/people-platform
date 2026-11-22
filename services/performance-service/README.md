@@ -14,7 +14,7 @@ Núcleo de domínio em Kotlin puro ([ADR 0011](../../docs/adr/0011-nucleo-de-dom
 | `adapters.persistence` | JPA, migrações Flyway e RLS por `app.tenant_id` |
 | `adapters.messaging` | Outbox e relay para `people.performance.events.v1` (`NineBoxCalibrado`, `AvaliacaoConcluida`) |
 
-Ainda não existem: consumo de `TenantCriado` e `AvaliacaoConcluida`, OKRs e assessment.
+OKRs (objetivos desdobrados, resultados-chave e check-ins) estão em `app/Okr.kt` e `domain/okr`, com o modelo de acesso no [ADR 0014](../../docs/adr/0014-okrs-modelo-de-acesso-e-limites.md). Ainda não existem: consumo de eventos (`TenantCriado`, `TitularExclusaoSolicitada`) e assessment.
 
 O raciocínio das regras está no [roteiro de nine box e calibração](../../docs/roteiros/nine-box-e-calibracao.md).
 

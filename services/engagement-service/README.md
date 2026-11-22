@@ -6,6 +6,7 @@ TypeScript + NestJS. Feedback privado com histórico, elogios públicos, 1:1 com
 
 - `src/domain`: regras puras (k-anonimato e supressão complementar em `anonymity.ts`, pontos e badges, 1:1, feedback).
 - `src/app`: casos de uso e portas (`Store.inTenant` abre a transação com o escopo do tenant).
+- **Exclusão de titular (parcial):** `PrivacyService` consome `TitularExclusaoSolicitada` e chama `erase_subject` (migração `0003_erasure.sql`, `SECURITY DEFINER`, presa ao tenant da sessão; o papel da aplicação não tem `DELETE`), que apaga feedbacks, 1:1, elogios, pontos, badges, participação, comunicados e leituras da pessoa e grava uma lápide; pontos novos para titular apagado são ignorados. `subject_id` é o colaborador (`employee_id`); respostas de clima não têm identidade (ADR 0007) e ficam. Sem recibo de conclusão; as linhas já gravadas na outbox ainda carregam ids.
 - `src/adapters/postgres`: repositórios, outbox com relay (`FOR UPDATE SKIP LOCKED`) e migrador. `adapters/kafka`: publicador e consumidor da gamificação. `adapters/http`: controllers, guard JWT e erros RFC 9457.
 - `migrations/`: esquema com RLS (`ENABLE` + `FORCE`) em toda tabela.
 

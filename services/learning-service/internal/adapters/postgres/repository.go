@@ -221,3 +221,19 @@ func (r processedRepo) Claim(ctx context.Context, eventID uuid.UUID, eventType s
 		ON CONFLICT DO NOTHING`, r.t.tenant, eventID, eventType, at)
 	return tag.RowsAffected() > 0, err
 }
+
+type privacyRepo struct{ t *txn }
+
+// EraseSubject chama erase_subject, a única via de exclusão: o papel da aplicação não tem DELETE nas tabelas.
+func (r privacyRepo) EraseSubject(ctx context.Context, subjectID, requestID uuid.UUID) (int, error) {
+	var removed int
+	err := r.t.tx.QueryRow(ctx, `SELECT erase_subject($1, $2)`, subjectID, requestID).Scan(&removed)
+	return removed, err
+}
+
+func (r privacyRepo) IsErased(ctx context.Context, subjectID uuid.UUID) (bool, error) {
+	var erased bool
+	err := r.t.tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM erased_subjects WHERE tenant_id = $1 AND subject_id = $2)`,
+		r.t.tenant, subjectID).Scan(&erased)
+	return erased, err
+}

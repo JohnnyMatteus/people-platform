@@ -166,6 +166,20 @@ class _TxRepository:
             tuple(SurveySegment(s["segment_key"], s["respondents"], s["scores"]) for s in segments),
         )
 
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID, request_id: UUID) -> int:
+        # A única via de exclusão: o papel da aplicação não tem DELETE; a função age só no tenant do escopo.
+        removed = await self._c.fetchval("SELECT erase_subject($1, $2)", subject_id, request_id)
+        return int(removed)
+
+    async def is_erased(self, tenant_id: UUID, subject_id: UUID) -> bool:
+        return bool(
+            await self._c.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM erased_subjects WHERE tenant_id = $1 AND subject_id = $2)",
+                tenant_id,
+                subject_id,
+            )
+        )
+
 
 class PostgresRepository:
     """Cada chamada avulsa é uma transação curta com o escopo do tenant; o consumidor usa `unit_of_work`."""
@@ -244,3 +258,11 @@ class PostgresRepository:
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None:
         async with self.unit_of_work(tenant_id) as tx:
             return await tx.get_survey(tenant_id, survey_id)
+
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID, request_id: UUID) -> int:
+        async with self.unit_of_work(tenant_id) as tx:
+            return await tx.erase_subject(tenant_id, subject_id, request_id)
+
+    async def is_erased(self, tenant_id: UUID, subject_id: UUID) -> bool:
+        async with self.unit_of_work(tenant_id) as tx:
+            return await tx.is_erased(tenant_id, subject_id)

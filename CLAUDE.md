@@ -31,6 +31,8 @@ make up | down | ps | logs     # ambiente local (perfil core)
 make tenant-service-up && make seed && make smoke
 make tenant-service-test       # um alvo por serviço: <serviço>-lint|test|build
 make performance-service-test  # roda na imagem gradle:8.14.3-jdk21 (sem Java local)
+make learning-service-test-unit # Go -short; learning-service-test inclui Postgres via testcontainers
+make web-up                    # front-end em http://localhost:5173
 ```
 
 ## Estrutura
@@ -38,7 +40,10 @@ make performance-service-test  # roda na imagem gradle:8.14.3-jdk21 (sem Java lo
 - `services/tenant-service`: Go, hexagonal (`internal/domain`, `internal/app`, `internal/adapters/*`, `internal/platform/*`). Migrações SQL embutidas em `internal/adapters/postgres/migrations`.
 - `services/engagement-service`: TypeScript/NestJS, hexagonal (`src/domain` puro, `src/app` casos de uso e portas, `src/adapters/{http,postgres,kafka}`, `src/platform`). Migrações em `migrations/`; `make engagement-service-test-unit` roda sem Docker e `make engagement-service-test` inclui a integração (testcontainers).
 - `services/performance-service`: Kotlin. Só o núcleo de domínio puro em `com.peopleplatform.performance.domain` (nine box, calibração, histórico, sucessão). Spring Boot entra como adaptador; o domínio não importa framework.
-- `contracts/openapi`: um arquivo por serviço (completos: tenant e performance; os demais são esboços).
+- `services/learning-service`: Go, hexagonal como o tenant-service (`internal/domain`, `internal/app`, `internal/adapters/*`); consome `CandidatoContratado` e `TitularExclusaoSolicitada`. Linguagem proposta no ADR 0012.
+- `services/recruitment-service` (PHP/Laravel) e `services/analytics-ai-service` (Python/FastAPI): ver o README de cada um; ambos consomem eventos com deduplicação por `event_id`.
+- `web/`: Vue 3 + Vuetify + TanStack Query; `make web-lint` e `make web-test` (o teste de contrato confere toda chamada do front contra o `krakend.json`).
+- `contracts/openapi`: um arquivo por serviço; os de tenant, performance, engagement, learning e analytics descrevem o que o serviço de fato serve (o `ContractConformanceIT` do performance exige igualdade exata de rotas).
 - `contracts/asyncapi`: `people-platform.yaml` e `schemas/*.vN.json` (envelope comum).
 - `docs/adr`: ADRs numerados. Decisão nova vira ADR novo; não reescreva ADR aceito.
 - `docs/roteiros`: defesa dos núcleos para entrevista.

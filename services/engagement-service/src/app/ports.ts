@@ -74,6 +74,16 @@ export interface OutboxRepository {
   add(e: OutboxEvent): Promise<void>;
 }
 
+export interface PrivacyRepository {
+  /**
+   * Apaga ou anonimiza tudo que aponta para a pessoa neste tenant e grava a lápide (sem dado pessoal). Devolve quantas
+   * linhas mudaram. No Postgres é a função erase_subject, porque o papel da aplicação não tem DELETE.
+   */
+  eraseSubject(subjectId: string, requestId: string): Promise<number>;
+  /** Há lápide: os projetores ignoram dado novo sobre o titular. */
+  isErased(subjectId: string): Promise<boolean>;
+}
+
 /** Repositórios ligados a uma transação com o escopo de um tenant. */
 export interface Tx {
   feedbacks: FeedbackRepository;
@@ -85,6 +95,7 @@ export interface Tx {
   outbox: OutboxRepository;
   settings: TenantSettingsRepository;
   processedEvents: ProcessedEventRepository;
+  privacy: PrivacyRepository;
 }
 
 export interface Store {

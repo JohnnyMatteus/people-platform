@@ -86,7 +86,7 @@ services:
     command:
       - |
         set -euo pipefail
-        for topic in people.tenant.events.v1 people.performance.events.v1 people.recruitment.events.v1 people.engagement.events.v1 people.directory.events.v1; do
+        for topic in people.tenant.events.v1 people.performance.events.v1 people.recruitment.events.v1 people.engagement.events.v1 people.directory.events.v1 people.privacy.events.v1; do
           kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$topic" --partitions 6 --replication-factor 1
         done
     restart: "no"
@@ -265,6 +265,8 @@ services:
       AWS_SECRET_ACCESS_KEY: test
       S3_RESUMES_BUCKET: ${S3_RESUMES_BUCKET:-people-platform-recruitment-resumes}
       S3_PRESIGN_ENDPOINT: http://localhost:${LOCALSTACK_PORT:-4566}
+      # Endpoint interno para operações do próprio serviço (apagar currículo); o de cima é o que o navegador alcança.
+      S3_ENDPOINT: http://localstack:4566
       KAFKA_BROKERS: kafka:9092
       CACHE_STORE: file
       SESSION_DRIVER: array
@@ -308,6 +310,19 @@ services:
     image: people-platform/recruitment-service:dev
     profiles: [recruitment-service]
     command: ["php", "artisan", "tenant-events:consume"]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment: *recruitment-env
+    restart: unless-stopped
+
+  # Consome TitularExclusaoSolicitada (people.privacy.events.v1) e apaga os dados do titular (LGPD).
+  recruitment-service-privacy-consumer:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "privacy-events:consume"]
     depends_on:
       recruitment-service-migrate:
         condition: service_completed_successfully

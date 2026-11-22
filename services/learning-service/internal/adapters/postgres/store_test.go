@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -204,4 +205,95 @@ func TestRLS_CrossTenantIsolation(t *testing.T) {
 			t.Fatalf("escopo sobreviveu à transação: viu %d trilhas (%v)", n, err)
 		}
 	})
+}
+
+func hireRaw(tenant, application, event uuid.UUID) []byte {
+	return []byte(`{"event_id":"` + event.String() + `","event_type":"CandidatoContratado","event_version":1,"tenant_id":"` + tenant.String() +
+		`","data":{"job_id":"` + uuid.NewString() + `","application_id":"` + application.String() + `","position_title":"Eletricista","unit":"Obra Norte","start_date":"2026-12-01"}}`)
+}
+
+func erasureRaw(tenant, subject, event uuid.UUID) []byte {
+	return []byte(`{"event_id":"` + event.String() + `","event_type":"TitularExclusaoSolicitada","event_version":1,"tenant_id":"` + tenant.String() +
+		`","data":{"request_id":"` + uuid.NewString() + `","subject_id":"` + subject.String() + `"}}`)
+}
+
+// Exclusão no Postgres real, com migrações reais e a conexão do papel da aplicação (membro de learning_app, sem DELETE).
+func TestErasure_RealDatabaseWithTheApplicationRole(t *testing.T) {
+	ctx := context.Background()
+	s := service()
+	tenantA, tenantB := uuid.New(), uuid.New()
+	trackA, adminA := seed(t, s, tenantA)
+	trackB, _ := seed(t, s, tenantB)
+
+	ana := app.Principal{Subject: uuid.NewString(), TenantID: tenantA, Roles: []string{"employee"}}
+	bruno := app.Principal{Subject: uuid.NewString(), TenantID: tenantA, Roles: []string{"employee"}}
+	anaID, _ := ana.EmployeeID()
+	for _, p := range []app.Principal{ana, bruno} {
+		if _, err := s.Enroll(ctx, p, trackA.ID, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	anaInB := app.Principal{Subject: anaID.String(), TenantID: tenantB, Roles: []string{"employee"}}
+	if _, err := s.Enroll(ctx, anaInB, trackB.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// O papel da aplicação não pode apagar direto: a imutabilidade é proposital.
+	// O erro cru: InTenant traduz 42501 para ErrNotFound e esconderia a causa.
+	var raw error
+	err := NewStore(appPool).InTenant(ctx, tenantA, func(tx app.Tx) error {
+		_, raw = tx.(*txn).tx.Exec(ctx, `DELETE FROM enrollments`)
+		return raw
+	})
+	if err == nil || raw == nil || !strings.Contains(raw.Error(), "permission denied") {
+		t.Fatalf("DELETE direto pelo papel da aplicação deveria ser negado: %v (cru: %v)", err, raw)
+	}
+
+	event := uuid.New()
+	if applied, err := s.HandleEvent(ctx, erasureRaw(tenantA, anaID, event)); err != nil || !applied {
+		t.Fatalf("exclusão: %v %v", applied, err)
+	}
+	if mine, _ := s.MyEnrollments(ctx, ana); len(mine) != 0 {
+		t.Fatalf("a Ana ainda tem %d matrícula(s)", len(mine))
+	}
+	if mine, _ := s.MyEnrollments(ctx, bruno); len(mine) != 1 {
+		t.Fatal("o Bruno não pode ser afetado")
+	}
+	if mine, _ := s.MyEnrollments(ctx, anaInB); len(mine) != 1 {
+		t.Fatal("o mesmo id no tenant B não pode ser afetado")
+	}
+	if applied, err := s.HandleEvent(ctx, erasureRaw(tenantA, anaID, event)); err != nil || applied {
+		t.Fatalf("reentrega do mesmo evento deveria ser no-op: %v %v", applied, err)
+	}
+
+	// Lápide: matrícula e vínculo posteriores ao pedido são recusados (e a lápide não tem dado pessoal).
+	if _, err := s.Enroll(ctx, ana, trackA.ID, nil); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("matrícula depois da exclusão: %v", err)
+	}
+	application := uuid.New()
+	if _, err := s.HandleEvent(ctx, hireRaw(tenantA, application, uuid.New())); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BindOnboarding(ctx, adminA, application, anaID); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("vínculo com titular apagado: %v", err)
+	}
+}
+
+func TestErasure_FunctionRequiresTenantScopeAndIsNotCallableWithoutIt(t *testing.T) {
+	ctx := context.Background()
+	// Sem escopo de tenant a função falha (não apaga nada em lugar nenhum).
+	err := pgx.BeginFunc(ctx, appPool, func(tx pgx.Tx) error {
+		var n int
+		return tx.QueryRow(ctx, `SELECT erase_subject($1, $2)`, uuid.New(), uuid.New()).Scan(&n)
+	})
+	if err == nil || !strings.Contains(err.Error(), "escopo de tenant") {
+		t.Fatalf("sem escopo a função deveria recusar: %v", err)
+	}
+	// EXECUTE foi revogado de PUBLIC: um papel sem o grant não chama a função.
+	// grantee 0 é PUBLIC no ACL da função.
+	var publicCanExecute bool
+	if err := ownerPool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a
+		WHERE p.proname = 'erase_subject' AND a.grantee = 0 AND a.privilege_type = 'EXECUTE')`).Scan(&publicCanExecute); err != nil || publicCanExecute {
+		t.Fatalf("PUBLIC não pode ter EXECUTE em erase_subject (permitido=%v, err=%v)", publicCanExecute, err)
+	}
 }

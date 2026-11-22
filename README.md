@@ -22,14 +22,15 @@ A People Platform reúne esses módulos numa plataforma única que cada empresa 
 | Tenants e white label | Cadastro, planos e feature flags, tema com WCAG AA, logo, domínio próprio, resolução por host ou claim, `TenantCriado` via outbox | ✅ Implementado |
 | Desempenho: nine box, calibração e sucessão | Classificação com limiares por tenant, calibração com trilha de auditoria, histórico e tendência, mapa de sucessão e sugestão de prontidão | 🟡 Núcleo de domínio implementado e testado; API HTTP na próxima rodada |
 | Desempenho: ciclos e assessment | Auto, gestor, pares, 180/360 e assessment de competências | 📝 Contrato esboçado |
-| Objetivos e metas (OKR) | Desdobramento empresa → colaborador, check-ins | 📋 Planejado |
+| Objetivos e metas (OKR) | Desdobramento empresa → equipe → pessoa, resultados-chave com progresso, check-ins | 🟡 Implementado (API, banco, tela); acesso do gestor vale para o tenant inteiro, ver ADR 0014 |
 | PDI | Planos a partir de gaps, ações sugeridas por IA | 📋 Planejado |
 | Recrutamento (ATS) | Vagas, pipeline por etapas, entrevistas, scorecards | ✅ Implementado |
 | Engajamento | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | ✅ Implementado; ADR de anonimato |
-| People analytics | Turnover, tempo de casa, admissões e desligamentos, sempre agregados | 🟡 Implementado com read models em memória |
-| Aprendizagem (LXM) | Trilhas e recomendação | 📋 Planejado (só documentado) |
+| People analytics | Turnover, tempo de casa, admissões e desligamentos, sempre agregados | ✅ Read models em Postgres com RLS; consumo de eventos atômico e idempotente |
+| Aprendizagem (LXM) | Trilhas, matrículas, progresso, sugestão do próximo conteúdo e integração de contratados | 🟡 Implementado em Go (ADR 0012, linguagem a confirmar); sugestão por regra, sem modelo |
 | IA transversal | Feedback, plano de ação do clima, PDI, contexto de 1:1 | 📝 ADR e contrato esboçado |
-| Front-end (Vue 3) | White label por tokens | 📋 Planejado |
+| Front-end (Vue 3) | White label por tokens; telas de avaliações, nine box, PDI, sucessão, metas, recrutamento, engajamento, analytics e aprendizagem | 🟡 Telas ligadas à API; falta o configurador de tema |
+| Privacidade (LGPD) | Exclusão por titular propagada por evento (`TitularExclusaoSolicitada`) | 🟡 **PARCIAL.** Produtor no tenant-service; consumidores em learning, engagement, recruitment e analytics. O performance-service não apaga, não há recibo de conclusão, outbox e backups retêm ids, e base legal e consentimento são do autor. Isto não é conformidade com a LGPD |
 
 Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pronto · 📋 planejado.
 
@@ -39,11 +40,11 @@ Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pront
 | --- | --- | --- | --- |
 | [`services/tenant-service`](services/tenant-service) | Go | Tenants, planos e features, white label, domínios, resolução de tenant | ✅ |
 | [`services/engagement-service`](services/engagement-service) | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | ✅ |
-| [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI | 🟡 API, RLS e outbox; sem consumo de eventos |
+| [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, OKRs e PDI | 🟡 API, RLS, outbox e OKRs; sem consumo de eventos |
 | [`services/recruitment-service`](services/recruitment-service) | PHP + Laravel | ATS: vagas, candidaturas, pipeline por tenant, entrevistas, scorecards, `CandidatoContratado` | ✅ |
-| [`services/analytics-ai-service`](services/analytics-ai-service) | Python + FastAPI | People analytics e recursos de IA | 🟡 consumo de eventos e IA com guardas |
-| `services/learning-service` | a definir | Aprendizagem (LXM) | 📋 |
-| [`web/`](web) | Vue 3 + Vuetify | Front-end white label (tema Grafite): nine box e calibração; demais telas são esqueleto | 🟡 |
+| [`services/analytics-ai-service`](services/analytics-ai-service) | Python + FastAPI | People analytics e recursos de IA | ✅ Postgres com RLS, consumo atômico de eventos e IA com guardas |
+| [`services/learning-service`](services/learning-service) | Go | Trilhas, matrículas, progresso, sugestões e onboarding | 🟡 |
+| [`web/`](web) | Vue 3 + Vuetify | Front-end white label (tema Grafite), no compose em http://localhost:5173 | 🟡 |
 
 | Plataforma | Tecnologia |
 | --- | --- |
@@ -99,13 +100,15 @@ make up                       # núcleo: Postgres, Kafka, Keycloak, gateway, Loc
 make tenant-service-up        # build + migração + tenant-service
 make recruitment-service-up   # build + migração + relay + recruitment-service (porta 8082)
 make engagement-service-up    # build + migração + engagement-service (porta 8083)
-make analytics-ai-service-up  # build + analytics-ai-service (porta 8084)
+make analytics-ai-service-up  # build + migração + analytics-ai-service (porta 8084)
+make learning-service-up      # build + migração + learning-service (porta 8086)
+make web-up                   # front-end em http://localhost:5173 (nginx, proxy /api para o gateway)
 make performance-service-up   # build + performance-service, migração Flyway na subida (porta 8085)
 make seed                     # os dois tenants fictícios (IDs iguais aos do realm do Keycloak)
 make smoke                    # fluxo ponta a ponta pelo gateway com tokens reais
 ```
 
-Para subir também observabilidade e ferramentas: `make up-all`. Portas no host: gateway 8000, tenant 8081, recruitment 8082, engagement 8083, analytics-ai 8084, performance 8085 (variáveis `*_SERVICE_PORT` no `.env`). Use `make ps` para ver a saúde dos contêineres e `make down` para parar tudo (ou `make clean` para apagar também os volumes).
+Para subir também observabilidade e ferramentas: `make up-all`. Portas no host: gateway 8000, tenant 8081, recruitment 8082, engagement 8083, analytics-ai 8084, performance 8085, learning 8086 e web 5173 (variáveis `*_SERVICE_PORT` e `WEB_PORT` no `.env`). Os bancos novos só nascem em volume novo do Postgres: depois de atualizar, rode `make clean` antes de `make up`. Use `make ps` para ver a saúde dos contêineres e `make down` para parar tudo (ou `make clean` para apagar também os volumes).
 
 | Endereço | O quê | Credencial (só dev) |
 | --- | --- | --- |
@@ -186,20 +189,32 @@ Os roteiros de entrevista sobre os núcleos explicam a solução, as alternativa
 - **O realm único no Keycloak** simplifica emissor, JWKS e automação, mas compartilha políticas de senha e sessão entre tenants (ADR 0004).
 - **O anonimato forte do clima** impede times pequenos de verem o próprio resultado e impede descobrir o autor, inclusive em casos graves, que têm canal próprio (ADR 0007).
 
+## Privacidade (LGPD): o que existe e o que não
+
+Existe: `POST /v1/tenants/{id}/data-subject-erasures` (admin do tenant) registra o pedido e publica `TitularExclusaoSolicitada`; learning, engagement, recruitment e analytics-ai apagam ou anonimizam o que guardam sobre o `subject_id` no tenant do evento, de forma idempotente, e gravam uma lápide sem dado pessoal para não recriar o dado se ele chegar depois. Nos três serviços cujo papel de banco não tem `DELETE`, a exclusão é uma função `SECURITY DEFINER` presa ao tenant da sessão.
+
+`subject_id` é o id da pessoa em cada serviço: o colaborador (o `sub` do token) em learning, engagement e analytics, e `candidates.id` ou o colaborador entrevistador/avaliador no recruitment. Candidato e colaborador têm ids diferentes e não há vínculo entre eles; um pedido apaga só o que casa com o id enviado.
+
+Não existe: exclusão no performance-service (avaliações, PDI, OKRs, histórico e cadastro de colaboradores), recibo de conclusão, limpeza da outbox e dos backups, exportação por titular, texto de consentimento e base legal (conteúdo jurídico do autor). Não há afirmação de conformidade neste repositório.
+
 ## Próximos passos
 
-1. **performance-service:** consumir `TenantCriado` (hoje o tenant só aparece pelo token) e `AvaliacaoConcluida`; OKRs e assessment, que ainda não existem.
-2. **Provisionador do Keycloak:** consumir `TenantCriado` e criar a Organization.
-3. **analytics-ai-service:** adaptador Postgres com RLS no lugar dos read models em memória; produtor real de `ColaboradorAtualizado` e `ColaboradorDesligado` (integração com o RH).
-4. **Fluxo de exclusão de titular (LGPD)** ponta a ponta e limpeza da outbox.
-5. **Front-end:** concluir as telas de avaliações, PDI e sucessão (hoje listas de leitura) e criar as de recrutamento, engajamento e analytics (hoje placeholders); configurador de tema com prévia de contraste.
-6. **learning-service** (LXM), ainda sem código.
-7. **Kubernetes** (Helm e GitOps), Schema Registry e Debezium.
+O que de fato falta (o resto está nas tabelas acima):
+
+1. **Hierarquia de gestão** (decisão do autor, ADR 0014): hoje o papel `manager` vale para o tenant inteiro, em OKRs e no restante do performance-service.
+2. **performance-service consumindo eventos:** `TenantCriado` e `TitularExclusaoSolicitada` (exclusão de titular ainda não chega ao desempenho, nem aos dados de PDI, avaliações e OKRs).
+3. **Exclusão de titular, o que falta:** recibo de conclusão por serviço (hoje cada serviço apaga sem devolver confirmação, então ninguém sabe se terminou); limpeza das linhas da outbox, que ainda carregam ids de pessoas (job de retenção); backups do Postgres, que retêm o dado apagado até expirarem; e o vínculo candidato ↔ colaborador, sem o qual um pedido apaga só o id enviado e as duas identidades exigem dois pedidos.
+4. **Diretório de pessoas** (`people-directory`): produtor real de `ColaboradorAtualizado` e `ColaboradorDesligado`, e o vínculo candidatura → colaborador que dispensa o passo manual do onboarding (ADR 0012).
+5. **Keycloak:** validar o provisionador contra um Keycloak real (a permissão do service account é hipótese, ADR 0013), associar usuários e domínios de e-mail à Organization.
+6. **Front-end:** configurador de tema com prévia de contraste; as telas novas ainda não foram exercitadas contra os serviços de pé.
+7. **Texto de consentimento e base legal:** é conteúdo jurídico e fica com o autor; a plataforma só executa a exclusão.
+8. **Kubernetes** (Helm e GitOps), Schema Registry e Debezium.
 
 ## Estrutura
 
 ```
 contracts/          OpenAPI 3.1 (por serviço) e AsyncAPI 3.0 + JSON Schemas dos eventos
+web/                front-end Vue 3 + Vuetify + TanStack Query (imagem nginx)
 docs/               design doc, ADRs e roteiros de entrevista
 infra/              Postgres (bancos por serviço), Keycloak, KrakenD, observabilidade, seed
 init/aws/           bootstrap do LocalStack (buckets S3 e identidades SES)

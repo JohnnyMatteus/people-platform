@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 use JsonException;
 
 /** Traduz a mensagem do tópico de tenants em ações do serviço. Mensagem fora do contrato é descartada. */
-final class TenantEventHandler
+final class TenantEventHandler implements MessageHandler
 {
     private const UUID = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
 

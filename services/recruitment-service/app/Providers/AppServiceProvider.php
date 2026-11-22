@@ -38,18 +38,20 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(ResumeStorage::class, function () {
             $s3 = config('recruitment.s3');
+            $client = fn (?string $endpoint) => new S3Client(array_filter([
+                'version' => 'latest',
+                'region' => $s3['region'],
+                'endpoint' => $endpoint,
+                'use_path_style_endpoint' => true,
+                'credentials' => $s3['key'] ? ['key' => $s3['key'], 'secret' => $s3['secret']] : null,
+            ]));
 
             return new S3ResumeStorage(
-                new S3Client(array_filter([
-                    'version' => 'latest',
-                    'region' => $s3['region'],
-                    'endpoint' => $s3['presign_endpoint'] ?? $s3['endpoint'],
-                    'use_path_style_endpoint' => true,
-                    'credentials' => $s3['key'] ? ['key' => $s3['key'], 'secret' => $s3['secret']] : null,
-                ])),
+                $client($s3['presign_endpoint'] ?? $s3['endpoint']),
                 $s3['bucket'],
                 $s3['allowed_content_types'],
                 $s3['upload_ttl_minutes'],
+                $client($s3['endpoint']),
             );
         });
 

@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Pool } from 'pg';
+import { PrivacyService } from './app/privacy-service';
 import { GamificationService } from './app/gamification-service';
 import { AppModule } from './app.module';
 import { TenantProvisioningService } from './app/tenant-provisioning-service';
-import { GamificationConsumer, KafkaPublisher, newKafka, TenantEventsConsumer } from './adapters/kafka/kafka';
+import { GamificationConsumer, KafkaPublisher, newKafka, PrivacyEventsConsumer, TenantEventsConsumer } from './adapters/kafka/kafka';
 import { OutboxRelay } from './adapters/postgres/outbox-relay';
 import { PostgresStore } from './adapters/postgres/store';
 import { TokenVerifier } from './platform/auth';
@@ -30,14 +31,16 @@ async function bootstrap() {
   const relay = new OutboxRelay(store, publisher);
   const consumer = new GamificationConsumer(kafka, new GamificationService(deps));
   const tenantConsumer = new TenantEventsConsumer(kafka, new TenantProvisioningService(deps));
+  const privacyConsumer = new PrivacyEventsConsumer(kafka, new PrivacyService(deps));
   relay.start(cfg.OUTBOX_INTERVAL_MS);
   consumer.start().catch((e) => Logger.error(`consumidor de gamificação falhou: ${String(e)}`, 'kafka'));
 
+  privacyConsumer.start().catch((e) => Logger.error(`consumidor de exclusão de titular falhou: ${String(e)}`, 'kafka'));
   tenantConsumer.start().catch((e) => Logger.error(`consumidor de TenantCriado falhou: ${String(e)}`, 'kafka'));
 
   const stop = async () => {
     relay.stop();
-    await Promise.allSettled([consumer.stop(), tenantConsumer.stop(), publisher.disconnect(), app.close()]);
+    await Promise.allSettled([consumer.stop(), tenantConsumer.stop(), privacyConsumer.stop(), publisher.disconnect(), app.close()]);
     await pool.end();
   };
   process.once('SIGTERM', () => void stop());

@@ -28,11 +28,11 @@ type Consumer struct {
 	retry   time.Duration
 }
 
-func NewConsumer(brokers []string, topic, group string, h Handler, logger *slog.Logger) (*Consumer, error) {
+func NewConsumer(brokers []string, topics []string, group string, h Handler, logger *slog.Logger) (*Consumer, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
-		kgo.ConsumeTopics(topic),
+		kgo.ConsumeTopics(topics...),
 		kgo.DisableAutoCommit(),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 		kgo.AllowAutoTopicCreation(),

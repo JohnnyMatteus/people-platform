@@ -152,3 +152,64 @@ async def test_the_same_event_id_in_another_tenant_is_not_a_duplicate(repo):
     assert await ing.handle(first) is True
     assert await ing.handle(other) is True
     assert len(await repo.list_employment(TENANT_B)) == 1
+
+
+def _erasure(tenant, subject, event_id):
+    return {
+        "event_id": str(event_id),
+        "event_type": "TitularExclusaoSolicitada",
+        "event_version": 1,
+        "tenant_id": str(tenant),
+        "aggregate_id": str(subject),
+        "occurred_at": "2026-11-22T12:00:00Z",
+        "producer": "tenant-service",
+        "data": {"request_id": "77777777-7777-4777-8777-777777777777", "subject_id": str(subject)},
+    }
+
+
+async def test_erasure_removes_the_subject_only_in_the_event_tenant_and_is_idempotent(repo):
+    from uuid import uuid4
+
+    ing = EventIngestor(repo)
+    nine_box = fixture("nine-box-calibrado")
+    employee = UUID(nine_box["data"]["employee_id"])
+    cycle = UUID(nine_box["data"]["cycle_id"])
+    assert await ing.handle(nine_box) is True
+    assert await ing.handle(fixture("avaliacao-concluida")) is True
+    assert await ing.handle({**nine_box, "event_id": str(uuid4()), "tenant_id": str(TENANT_B)}) is True
+
+    event_id = uuid4()
+    assert await ing.handle(_erasure(TENANT_A, employee, event_id)) is True
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await repo.latest_assessment(TENANT_A, employee) is None
+    # O mesmo employee_id no tenant B é outra pessoa para este tenant: o evento do A não o alcança.
+    assert len(await repo.list_nine_box(TENANT_B, cycle)) == 1
+
+    assert await ing.handle(_erasure(TENANT_A, employee, event_id)) is False  # reentrega
+
+
+async def test_erasure_event_fora_do_contrato_is_invalid(repo):
+    from uuid import uuid4
+
+    bad = _erasure(TENANT_A, uuid4(), uuid4())
+    bad["data"] = {"subject_id": "nao-e-uuid"}
+    with pytest.raises(InvalidEventError):
+        await EventIngestor(repo).handle(bad)
+
+
+async def test_late_event_after_erasure_does_not_resurrect_the_subject(repo):
+    from uuid import uuid4
+
+    ing = EventIngestor(repo)
+    nine_box = fixture("nine-box-calibrado")
+    employee = UUID(nine_box["data"]["employee_id"])
+    cycle = UUID(nine_box["data"]["cycle_id"])
+
+    # A exclusão chega ANTES dos dados (não há ordem entre tópicos).
+    assert await ing.handle(_erasure(TENANT_A, employee, uuid4())) is True
+    assert await ing.handle(nine_box) is True  # consumido, mas ignorado pelo projetor
+    assert await ing.handle(fixture("avaliacao-concluida")) is True
+    assert await ing.handle(fixture("candidato-contratado")) is True  # outra pessoa: continua projetando
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+    assert await repo.latest_assessment(TENANT_A, employee) is None
+    assert len(await repo.list_employment(TENANT_A)) == 1

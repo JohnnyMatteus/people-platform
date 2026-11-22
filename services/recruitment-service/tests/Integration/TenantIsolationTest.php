@@ -2,17 +2,24 @@
 
 namespace Tests\Integration;
 
+use App\Application\DataSubjectEraser;
 use App\Application\EventPublisher;
 use App\Application\OutboxRelay;
+use App\Infrastructure\Messaging\PrivacyEventHandler;
 use App\Infrastructure\Tenancy\TenantTransaction;
+use App\Models\Candidate;
+use App\Models\Interview;
 use App\Models\Job;
+use App\Models\JobApplication;
 use App\Models\OutboxMessage;
+use App\Models\Scorecard;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\IssuesTokens;
+use Tests\Support\RecordingResumeStorage;
 use Tests\TestCase;
 
 /**
@@ -190,5 +197,79 @@ class TenantIsolationTest extends TestCase
     private function byTenantOrder(array $sent, array $a, array $b): array
     {
         return [...array_values(array_filter($sent, fn ($id) => in_array($id, $a, true))), ...array_values(array_filter($sent, fn ($id) => in_array($id, $b, true)))];
+    }
+
+    /** @return array{candidate: string, application: string, interview: string, key: string} */
+    private function seedCandidate(string $tenant, string $email, string $evaluator): array
+    {
+        $tx = app(TenantTransaction::class);
+
+        return $tx->run($tenant, function () use ($tenant, $email, $evaluator): array {
+            $job = Job::first();
+            $candidate = Candidate::create(['name' => 'Ana Souza', 'email' => $email]);
+            $application = JobApplication::create([
+                'job_id' => $job->id, 'candidate_id' => $candidate->id, 'stage' => 'triagem', 'status' => 'active',
+            ]);
+            $key = "tenants/{$tenant}/applications/{$application->id}/resume.pdf";
+            $application->update(['resume_key' => $key]);
+            $interview = Interview::create([
+                'application_id' => $application->id, 'kind' => 'entrevista-rh', 'interviewer_id' => $evaluator,
+                'scheduled_at' => '2026-12-01 10:00:00',
+            ]);
+            Scorecard::create([
+                'interview_id' => $interview->id, 'evaluator_id' => $evaluator, 'recommendation' => 'yes',
+                'ratings' => [['criterion' => 'Aderência', 'score' => 4]],
+            ]);
+
+            return ['candidate' => $candidate->id, 'application' => $application->id, 'interview' => $interview->id, 'key' => $key];
+        });
+    }
+
+    public function test_exclusao_de_titular_no_postgres_real_com_o_papel_da_aplicacao(): void
+    {
+        $tx = app(TenantTransaction::class);
+        $evaluator = (string) Str::uuid7();
+        $acme = $this->seedCandidate(self::A, 'ana@example.com', $evaluator);
+        $outro = $this->seedCandidate(self::A, 'bia@example.com', $evaluator);
+        $sol = $this->seedCandidate(self::B, 'ana@example.com', $evaluator);
+
+        $storage = new RecordingResumeStorage;
+        $handler = new PrivacyEventHandler(new DataSubjectEraser($tx, $storage));
+        $event = [
+            'event_id' => (string) Str::uuid7(), 'event_type' => 'TitularExclusaoSolicitada', 'event_version' => 1,
+            'tenant_id' => self::A, 'aggregate_id' => $acme['candidate'], 'occurred_at' => '2026-11-22T12:00:00Z',
+            'producer' => 'tenant-service',
+            'data' => ['request_id' => (string) Str::uuid7(), 'subject_id' => $acme['candidate']],
+        ];
+
+        $this->assertTrue($handler->handle(json_encode($event)));
+
+        $count = fn (string $tenant, string $table, string $column, string $id) => $tx->run(
+            $tenant,
+            fn () => DB::table($table)->where($column, $id)->count(),
+        );
+        $this->assertSame(0, $count(self::A, 'candidates', 'id', $acme['candidate']));
+        $this->assertSame(0, $count(self::A, 'applications', 'id', $acme['application']));
+        $this->assertSame(0, $count(self::A, 'scorecards', 'interview_id', $acme['interview']));
+        $this->assertSame([$acme['key']], $storage->deleted);
+        // Outro titular do mesmo tenant e o mesmo e-mail no outro tenant ficam intactos.
+        $this->assertSame(1, $count(self::A, 'candidates', 'id', $outro['candidate']));
+        $this->assertSame(1, $count(self::B, 'candidates', 'id', $sol['candidate']));
+        $this->assertSame(1, $count(self::B, 'scorecards', 'interview_id', $sol['interview']));
+        // Lápide só com identificadores, só no tenant do pedido.
+        $this->assertSame(1, $count(self::A, 'erased_subjects', 'subject_id', $acme['candidate']));
+        $this->assertSame(0, $count(self::B, 'erased_subjects', 'subject_id', $acme['candidate']));
+
+        $this->assertFalse($handler->handle(json_encode($event)), 'reentrega do mesmo event_id é no-op');
+        $this->assertSame([$acme['key']], $storage->deleted);
+
+        // A lápide é imutável para o papel da aplicação (só SELECT e INSERT): ele não consegue desfazer a exclusão.
+        try {
+            $tx->run(self::A, fn () => DB::table('erased_subjects')->delete());
+            $this->fail('o papel da aplicação não pode apagar a lápide');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('permission denied', $e->getMessage());
+        }
+        $this->assertSame(1, $count(self::A, 'erased_subjects', 'subject_id', $acme['candidate']));
     }
 }

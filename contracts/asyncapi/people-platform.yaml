@@ -20,6 +20,7 @@ info:
     - name: recruitment
     - name: engagement
     - name: directory
+    - name: privacy
 defaultContentType: application/json
 servers:
   local:
@@ -65,6 +66,12 @@ channels:
         $ref: '#/components/messages/ColaboradorAtualizado'
       ColaboradorDesligado:
         $ref: '#/components/messages/ColaboradorDesligado'
+  privacyEvents:
+    address: people.privacy.events.v1
+    description: "Pedidos de exclusão de titular (produtor: tenant-service). Todo serviço que guarda dados pessoais consome."
+    messages:
+      TitularExclusaoSolicitada:
+        $ref: '#/components/messages/TitularExclusaoSolicitada'
 operations:
   publishTenantEvents:
     action: send
@@ -74,6 +81,20 @@ operations:
     messages:
       - $ref: '#/channels/tenantEvents/messages/TenantCriado'
       - $ref: '#/channels/tenantEvents/messages/TenantPlanoAlterado'
+  publishPrivacyEvents:
+    action: send
+    description: "Publicado por tenant-service via transactional outbox, a pedido do tenant-admin."
+    channel:
+      $ref: '#/channels/privacyEvents'
+    messages:
+      - $ref: '#/channels/privacyEvents/messages/TitularExclusaoSolicitada'
+  eraseDataSubject:
+    action: receive
+    description: "learning-service, engagement-service, recruitment-service e analytics-ai-service apagam ou anonimizam os dados do titular no tenant do evento, de forma idempotente (deduplicação por event_id), e gravam uma lápide sem dado pessoal para não recriar o dado se ele chegar depois. subject_id é o id da pessoa em cada serviço (colaborador ou candidato, ids distintos e sem vínculo): um pedido apaga só o que casa com ele. performance-service ainda não consome; não há recibo de conclusão."
+    channel:
+      $ref: '#/channels/privacyEvents'
+    messages:
+      - $ref: '#/channels/privacyEvents/messages/TitularExclusaoSolicitada'
   publishPerformanceEvents:
     action: send
     description: "Publicado por performance-service via transactional outbox."
@@ -212,6 +233,21 @@ components:
           bindingVersion: 0.5.0
       payload:
         $ref: './schemas/nine-box-calibrado.v1.json'
+    TitularExclusaoSolicitada:
+      name: TitularExclusaoSolicitada
+      title: Exclusão de titular solicitada
+      summary: Exclusão de titular solicitada (subject_id é colaborador ou candidato; um pedido por identidade).
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/titular-exclusao-solicitada.v1.json'
     CandidatoContratado:
       name: CandidatoContratado
       title: Candidato contratado

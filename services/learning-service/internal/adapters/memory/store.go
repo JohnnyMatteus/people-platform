@@ -21,10 +21,11 @@ type Store struct {
 	onboarding  []domain.OnboardingAssignment
 	defaults    map[uuid.UUID]uuid.UUID
 	processed   map[[2]uuid.UUID]bool
+	erased      map[[2]uuid.UUID]bool
 }
 
 func NewStore() *Store {
-	return &Store{defaults: map[uuid.UUID]uuid.UUID{}, processed: map[[2]uuid.UUID]bool{}}
+	return &Store{defaults: map[uuid.UUID]uuid.UUID{}, processed: map[[2]uuid.UUID]bool{}, erased: map[[2]uuid.UUID]bool{}}
 }
 
 var _ app.Store = (*Store)(nil)
@@ -45,6 +46,7 @@ func (t *tx) Enrollments() app.EnrollmentRepository         { return enrollments
 func (t *tx) Onboarding() app.OnboardingRepository          { return onboarding{t} }
 func (t *tx) Settings() app.SettingsRepository              { return settings{t} }
 func (t *tx) ProcessedEvents() app.ProcessedEventRepository { return processed{t} }
+func (t *tx) Privacy() app.PrivacyRepository                { return privacy{t} }
 
 type tracks struct{ t *tx }
 
@@ -203,4 +205,34 @@ func (r processed) Claim(_ context.Context, eventID uuid.UUID, _ string, _ time.
 	}
 	r.t.s.processed[key] = true
 	return true, nil
+}
+
+type privacy struct{ t *tx }
+
+func (r privacy) EraseSubject(_ context.Context, subjectID, _ uuid.UUID) (int, error) {
+	removed := 0
+	keptEnrollments := r.t.s.enrollments[:0]
+	for _, e := range r.t.s.enrollments {
+		if e.TenantID == r.t.tenant && e.EmployeeID == subjectID {
+			removed++
+			continue
+		}
+		keptEnrollments = append(keptEnrollments, e)
+	}
+	r.t.s.enrollments = keptEnrollments
+	keptAssignments := r.t.s.onboarding[:0]
+	for _, a := range r.t.s.onboarding {
+		if a.TenantID == r.t.tenant && a.EmployeeID != nil && *a.EmployeeID == subjectID {
+			removed++
+			continue
+		}
+		keptAssignments = append(keptAssignments, a)
+	}
+	r.t.s.onboarding = keptAssignments
+	r.t.s.erased[[2]uuid.UUID{r.t.tenant, subjectID}] = true
+	return removed, nil
+}
+
+func (r privacy) IsErased(_ context.Context, subjectID uuid.UUID) (bool, error) {
+	return r.t.s.erased[[2]uuid.UUID{r.t.tenant, subjectID}], nil
 }

@@ -25,6 +25,7 @@ class InMemoryRepository:
         self._assessments: dict[UUID, dict[UUID, AssessmentFact]] = defaultdict(dict)
         self._nine_box: dict[UUID, dict[tuple[UUID, UUID], NineBoxFact]] = defaultdict(dict)
         self._surveys: dict[UUID, dict[UUID, SurveyFact]] = defaultdict(dict)
+        self._erased: dict[UUID, set[UUID]] = defaultdict(set)
 
     @asynccontextmanager
     async def unit_of_work(self, tenant_id: UUID) -> AsyncIterator[InMemoryRepository]:
@@ -75,3 +76,18 @@ class InMemoryRepository:
 
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None:
         return self._surveys[tenant_id].get(survey_id)
+
+    async def is_erased(self, tenant_id: UUID, subject_id: UUID) -> bool:
+        return subject_id in self._erased[tenant_id]
+
+    async def erase_subject(self, tenant_id: UUID, subject_id: UUID, request_id: UUID) -> int:
+        self._erased[tenant_id].add(subject_id)
+        removed = 0
+        if self._employment[tenant_id].pop(subject_id, None) is not None:
+            removed += 1
+        if self._assessments[tenant_id].pop(subject_id, None) is not None:
+            removed += 1
+        for key in [k for k in self._nine_box[tenant_id] if k[1] == subject_id]:
+            del self._nine_box[tenant_id][key]
+            removed += 1
+        return removed

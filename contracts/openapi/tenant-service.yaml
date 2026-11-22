@@ -28,6 +28,8 @@ tags:
     description: Tema, logo e domínios próprios.
   - name: resolution
     description: Resolução de tenant por host ou por claim.
+  - name: privacy
+    description: Pedidos de exclusão de titular (LGPD).
   - name: ops
     description: Saúde e métricas.
 paths:
@@ -338,6 +340,56 @@ paths:
           $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+  /v1/tenants/{id}/data-subject-erasures:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+    post:
+      tags: [privacy]
+      operationId: requestDataSubjectErasure
+      summary: Registra o pedido de exclusão de um titular e publica TitularExclusaoSolicitada (admin do tenant).
+      description: |
+        A exclusão nos demais serviços é assíncrona e idempotente, e não há confirmação de volta. O corpo
+        leva só o identificador da pessoa; o motivo jurídico e qualquer texto de consentimento ficam fora
+        deste fluxo. `subject_id` é o id da pessoa nos serviços: o colaborador (o `sub` do token, `employee_id`)
+        ou o candidato (`candidates.id` do recruitment). Candidato e colaborador têm ids diferentes e não há
+        vínculo entre eles, então um pedido apaga só o que casa com o id enviado; para apagar as duas
+        identidades é preciso um pedido por id. O performance-service ainda não consome o evento, e este
+        endpoint não é, sozinho, garantia de conformidade com a LGPD.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [subject_id]
+              properties:
+                subject_id:
+                  type: string
+                  format: uuid
+                  description: Id da pessoa nos serviços (colaborador ou candidato; ver a descrição da operação).
+      responses:
+        "202":
+          description: Pedido aceito e registrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request_id]
+                properties:
+                  request_id:
+                    type: string
+                    format: uuid
+        "400":
+          description: Corpo ilegível ou subject_id que não é UUID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /v1/tenants/{id}/domains:
     parameters:
       - $ref: "#/components/parameters/TenantId"

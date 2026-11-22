@@ -67,3 +67,4 @@ func (t *txn) Enrollments() app.EnrollmentRepository         { return enrollment
 func (t *txn) Onboarding() app.OnboardingRepository          { return onboardingRepo{t} }
 func (t *txn) Settings() app.SettingsRepository              { return settingsRepo{t} }
 func (t *txn) ProcessedEvents() app.ProcessedEventRepository { return processedRepo{t} }
+func (t *txn) Privacy() app.PrivacyRepository                { return privacyRepo{t} }

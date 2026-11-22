@@ -2,6 +2,7 @@ import { Pool, type PoolClient } from 'pg';
 import type { Store, Tx } from '../../app/ports';
 import { invalid } from '../../domain/errors';
 import { PostgresFeedbacks, PostgresOneOnOnes, PostgresPosts, PostgresPraises } from './social-repositories';
+import { PostgresPrivacy } from './privacy-repository';
 import { PostgresOutbox, PostgresPoints, PostgresProcessedEvents, PostgresSurveys, PostgresTenantSettings } from './engagement-repositories';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,4 +49,5 @@ const txFor = (c: PoolClient): Tx => ({
   outbox: new PostgresOutbox(c),
   settings: new PostgresTenantSettings(c),
   processedEvents: new PostgresProcessedEvents(c),
+  privacy: new PostgresPrivacy(c),
 });

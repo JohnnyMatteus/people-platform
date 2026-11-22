@@ -11,10 +11,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/domain"
 )
 
 // TopicTenantEvents é o tópico Kafka dos eventos de tenant (ver contracts/asyncapi).
 const TopicTenantEvents = "people.tenant.events.v1"
+
+// TopicPrivacyEvents é o tópico dos pedidos de exclusão de titular (contracts/asyncapi, canal privacyEvents).
+const TopicPrivacyEvents = "people.privacy.events.v1"
+
+// topicFor escolhe o tópico pelo tipo do evento: um só relay, uma só outbox, mais de um tópico.
+func topicFor(eventType string) string {
+	if eventType == domain.EventDataSubjectErasureRequested {
+		return TopicPrivacyEvents
+	}
+	return TopicTenantEvents
+}
 
 // Message é uma mensagem pronta para o barramento.
 type Message struct {
@@ -202,7 +215,7 @@ func toMessage(p pendingRow) (Message, error) {
 		headers["traceparent"] = *p.traceparent
 	}
 	// Chave = tenant_id: eventos do mesmo tenant caem na mesma partição e mantêm a ordem.
-	return Message{Topic: TopicTenantEvents, Key: p.env.TenantID.String(), Value: value, Headers: headers}, nil
+	return Message{Topic: topicFor(p.env.EventType), Key: p.env.TenantID.String(), Value: value, Headers: headers}, nil
 }
 
 // Run executa RunOnce em intervalo até o contexto ser cancelado. Lotes cheios disparam a

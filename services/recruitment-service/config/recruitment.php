@@ -29,6 +29,7 @@ return [
         'topic' => env('KAFKA_RECRUITMENT_TOPIC', 'people.recruitment.events.v1'),
         'relay_batch' => 50,
         'tenant_topic' => env('KAFKA_TENANT_TOPIC', 'people.tenant.events.v1'),
+        'privacy_topic' => env('KAFKA_PRIVACY_TOPIC', 'people.privacy.events.v1'),
         'group_id' => env('KAFKA_GROUP_ID', 'recruitment-service'),
     ],
 ];

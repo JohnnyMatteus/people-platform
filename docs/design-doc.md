@@ -150,12 +150,12 @@ Relações principais:
 | Serviço | Linguagem | Responsabilidade | Status |
 | --- | --- | --- | --- |
 | tenant-service | Go | Tenants, planos e features, white label, domínios, resolução de tenant, `TenantCriado` | Implementado |
-| performance-service | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs, PDI | Núcleo de domínio (nine box, calibração, histórico, sucessão) |
+| performance-service | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs, PDI | API, RLS, outbox e OKRs (ADR 0014); sem consumo de eventos |
 | recruitment-service | PHP + Laravel | ATS | Implementado |
 | engagement-service | TypeScript + NestJS | Feedback, elogios, 1:1, clima, gamificação, rede social | Implementado |
-| analytics-ai-service | Python + FastAPI | People analytics e IA | Implementado (read models em memória) |
-| learning-service | a definir | LXM | Documentado |
-| web | Vue 3 | Front-end white label | Planejado |
+| analytics-ai-service | Python + FastAPI | People analytics e IA | Implementado (Postgres com RLS, consumo atômico) |
+| learning-service | Go (ADR 0012, proposto) | LXM: trilhas, matrículas, sugestões, onboarding | Implementado; sugestão por regra |
+| web | Vue 3 | Front-end white label | Telas ligadas à API; no compose |
 
 ### 3.4 Arquitetura interna dos serviços
 
@@ -344,7 +344,8 @@ Os contratos estão em [`contracts/asyncapi/people-platform.yaml`](../contracts/
 
 | Evento | Produtor | Consumidores | Efeito |
 | --- | --- | --- | --- |
-| `TenantCriado` | tenant-service | recruitment, engagement e analytics-ai (implementado); provisionador do Keycloak (planejado) | Prepara pipeline padrão e configurações do tenant; cria a Organization |
+| `TenantCriado` | tenant-service | recruitment, engagement e analytics-ai (implementado); provisionador do Keycloak dentro do tenant-service (implementado, ADR 0013, não exercitado contra Keycloak real) | Prepara pipeline padrão e configurações do tenant; cria a Organization |
+| `TitularExclusaoSolicitada` | tenant-service (`POST /v1/tenants/{id}/data-subject-erasures`) | learning, engagement, recruitment e analytics-ai (implementado); performance (planejado) | **Parcial.** Cada serviço consumidor apaga os dados do titular no tenant do evento, de forma idempotente, e grava uma lápide sem dado pessoal. `subject_id` é o id da pessoa em cada serviço (colaborador ou candidato, sem vínculo entre eles). Sem recibo de volta, sem performance, e outbox e backups ainda retêm ids |
 | `ColaboradorAtualizado` / `ColaboradorDesligado` | people-directory (integração com o RH) | analytics-ai-service | Vínculo com área, unidade e faixa etária agregada; alimentam turnover e tempo de casa, sem dados pessoais |
 | `TenantPlanoAlterado` | tenant-service | todos | Liga ou desliga módulos conforme as features |
 | `AvaliacaoConcluida` | performance-service | performance (calibração), analytics-ai (gaps → PDI) | Entra na sessão de calibração; gaps viram sugestões de PDI |
@@ -459,7 +460,7 @@ A decisão está no [ADR 0006](adr/0006-database-per-service-e-outbox.md).
 | Anonimato do clima | Por arquitetura, não por promessa ([ADR 0007](adr/0007-anonimato-do-clima-por-desenho.md)): identidade e resposta em tabelas sem ligação, segmento grosso, k ≥ 5 (mínimo absoluto 3), supressão complementar. |
 | Dados sensíveis | Dados demográficos usados em analytics (ex.: gênero, faixa etária) são opcionais, coletados com consentimento específico e só aparecem agregados. |
 | Retenção | Currículos de não contratados expiram (lifecycle de 365 dias no bucket); outbox publicada é limpa periodicamente (planejado); dados de vínculo seguem prazos legais trabalhistas. |
-| Direito de exclusão e acesso | Um evento `TitularExclusaoSolicitada` (planejado) dispara, em cada serviço, anonimização dos registros do titular (substituição do `employee_id` por um identificador irreversível e remoção de texto livre), preservando agregados e obrigações legais; cada serviço responde com `TitularExclusaoConcluida`, e o tenant-service consolida o relatório para o controlador. Exportação (portabilidade) segue o mesmo fluxo. |
+| Direito de exclusão e acesso | **Estado real (parcial):** `TitularExclusaoSolicitada` existe e é consumido por learning, engagement, recruitment e analytics-ai, que apagam (não anonimizam por substituição de id) os registros do titular e gravam uma lápide; o performance-service não consome, não existe `TitularExclusaoConcluida` nem relatório consolidado, outbox e backups retêm ids, não há exportação, e base legal e consentimento são do autor. O desenho abaixo é a meta, não o que está entregue. Um evento `TitularExclusaoSolicitada` dispara, em cada serviço, anonimização dos registros do titular (substituição do `employee_id` por um identificador irreversível e remoção de texto livre), preservando agregados e obrigações legais; cada serviço responde com `TitularExclusaoConcluida`, e o tenant-service consolida o relatório para o controlador. Exportação (portabilidade) segue o mesmo fluxo. |
 | Encerramento do tenant | `DELETE /tenants/{id}` desativa (não apaga) porque o controlador precisa de prazo para exportar; a exclusão física por tenant é um job que percorre os serviços por `tenant_id`, viável justamente pelo modelo pool com `tenant_id` em toda tabela. |
 | Logs e traces | Sem dados pessoais em logs; o collector remove `authorization` e `enduser.email` de spans por garantia. |
 
@@ -495,14 +496,14 @@ Os SLOs iniciais propostos para o tenant-service, por estar no caminho de toda r
 | Tenants e white label | **Implementado**: CRUD, planos, features, tema WCAG, domínios, resolução, outbox, RLS, OTel | Provisionador de Organization no Keycloak a partir de `TenantCriado`; limpeza da outbox | Domínio próprio com certificado ACME; silo opcional por tenant |
 | Desempenho: nine box, calibração e sucessão | **Núcleo de domínio implementado e testado** | API Spring Boot conforme OpenAPI, persistência com RLS, outbox `NineBoxCalibrado` | Assessment de competências |
 | Desempenho: ciclos de avaliação | Contrato esboçado | Ciclos auto/gestor/pares, consolidação, `AvaliacaoConcluida` | 180/360 com anonimato de pares |
-| Objetivos e metas | Documentado | — | OKRs desdobrados com check-ins |
+| Objetivos e metas | **Implementado** (API, banco com RLS, tela) | Hierarquia de gestão (ADR 0014) | Cascata de progresso do filho para o pai |
 | PDI | Documentado | Consumo de gaps | Sugestões por IA e acompanhamento |
 | Recrutamento (ATS) | Contrato esboçado | Laravel: vagas, pipeline, currículos no S3, `CandidatoContratado` | Scorecards e entrevistas |
 | Engajamento | Contrato esboçado; ADR de anonimato | NestJS: feedback, elogios, clima com k-anonimato | 1:1 com contexto, gamificação, rede social |
 | People analytics e IA | Contrato esboçado; ADR de IA | FastAPI: turnover agregado, cliente LLM falso nos testes | Plano de ação do clima, rascunho de feedback |
-| Aprendizagem (LXM) | Documentado | — | Trilhas e recomendação |
-| Front-end white label | Tokens servidos pela API | Vue 3 consumindo `/branding` | Configurador de tema com prévia de contraste |
-| Plataforma | Compose por perfis, KrakenD, Keycloak, Kafka, observabilidade, CI por caminho | Exclusão de titular (LGPD) ponta a ponta | Kubernetes (Helm/GitOps), Schema Registry, Debezium |
+| Aprendizagem (LXM) | **Implementado** em Go | Vínculo candidatura → colaborador pelo diretório de pessoas | Recomendação com modelo |
+| Front-end white label | **Telas ligadas à API** e imagem nginx no compose | Exercitar contra os serviços de pé | Configurador de tema com prévia de contraste |
+| Plataforma | Compose por perfis, KrakenD, Keycloak, Kafka, observabilidade, CI por caminho, exclusão de titular por evento | Recibo de exclusão por serviço, performance consumindo eventos, retenção da outbox | Kubernetes (Helm/GitOps), Schema Registry, Debezium |
 
 ## 14. Questões em aberto
 

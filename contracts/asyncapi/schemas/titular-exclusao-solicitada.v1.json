@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/titular-exclusao-solicitada.v1.json",
+  "title": "TitularExclusaoSolicitada v1",
+  "description": "Um titular de dados pediu a exclusão. Cada serviço apaga ou anonimiza o que guarda sobre ele neste tenant. subject_id é o identificador da pessoa nos serviços (colaborador ou candidato); não carrega nome, e-mail nem o motivo jurídico, que ficam no registro do pedido fora do barramento. Não é uma garantia de conformidade: a exclusão é assíncrona, não há recibo de conclusão, e outbox e backups ainda retêm ids.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "event_type": {
+      "const": "TitularExclusaoSolicitada"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "producer": {
+      "const": "tenant-service"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "subject_id"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Identificador do pedido, para rastrear a exclusão em cada serviço."
+        },
+        "subject_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Identificador opaco da pessoa. Cada serviço o compara com os ids que guarda: learning, engagement e analytics-ai usam o colaborador (employee_id, o sub do token); o analytics-ai também alcança o vínculo provisório criado por CandidatoContratado, que usa application_id como employee_id; o recruitment compara com candidates.id (candidato) e com interviewer_id e evaluator_id (colaborador). Candidato e colaborador têm ids diferentes e não há vínculo entre eles (o diretório de pessoas não existe): um pedido apaga só o que casa com o id enviado, e apagar as duas identidades exige um pedido por id. O performance-service ainda não consome este evento."
+        }
+      }
+    }
+  }
+}

@@ -37,6 +37,10 @@ Migrações usam a conexão `migrate` (dono do esquema): `php artisan migrate --
 - `Unit` e `Feature` (SQLite): domínio, JWT, URLs do S3, fluxo completo da API, isolamento no nível da aplicação e conformidade do evento com o AsyncAPI.
 - `Integration` (Postgres real, `RECRUITMENT_PG_TESTS=1`, roda no CI): vazamento entre tenants com RLS (consulta sem WHERE, escrita cruzada, sem escopo, escopo que não sobrevive à transação) e outbox.
 
+## Exclusão de titular (LGPD)
+
+`privacy-events:consume` lê `TitularExclusaoSolicitada` e `DataSubjectEraser` apaga, no tenant do evento, candidato, candidaturas, entrevistas, scorecards e o currículo no S3 (o endpoint interno `S3_ENDPOINT` é distinto do de URLs assinadas). Para um colaborador que entrevistou ou avaliou, só a ligação é desfeita. Deduplicação por `event_id`. O relay da outbox registra `attempts` e `last_error` e não deixa um tenant com mensagem recusada travar os outros.
+
 ## Fora do escopo desta rodada
 
-Rota no gateway KrakenD, consumo de `TenantCriado`, imagem de produção (php-fpm + nginx) e expurgo de currículos de não contratados além da expiração do bucket.
+Imagem de produção (php-fpm + nginx) e expurgo de currículos de não contratados além da expiração do bucket.

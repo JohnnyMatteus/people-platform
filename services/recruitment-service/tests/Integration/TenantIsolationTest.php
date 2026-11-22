@@ -121,4 +121,74 @@ class TenantIsolationTest extends TestCase
         $this->assertEqualsCanonicalizing([[self::A, self::A, 'CandidatoContratado'], [self::B, self::B, 'CandidatoContratado']], $published);
         $this->assertSame(0, (new OutboxRelay($tx, $publisher))->drain(10)->published);
     }
+
+    public function test_relay_com_mensagem_recusada_isola_o_tenant_e_so_a_linha_recusada_conta_tentativa(): void
+    {
+        $tx = app(TenantTransaction::class);
+        $enqueue = function (string $tenant, int $count, string $start) use ($tx): array {
+            $ids = [];
+            for ($i = 0; $i < $count; $i++) {
+                $ids[] = $tx->run($tenant, fn () => OutboxMessage::create([
+                    'tenant_id' => $tenant, 'aggregate_id' => (string) Str::uuid7(), 'event_type' => 'CandidatoContratado',
+                    'event_version' => 1, 'payload' => [], 'occurred_at' => date('Y-m-d H:i:s', strtotime($start) + $i),
+                ])->id);
+            }
+
+            return $ids;
+        };
+        // A é a mais antiga e tem mais pendentes que o lote (5): sozinha, esgotaria todas as buscas.
+        $a = $enqueue(self::A, 7, '2026-11-22 09:00:00');
+        $b = $enqueue(self::B, 4, '2026-11-22 10:00:00');
+        $reject = [$a[1], $b[2]];
+
+        $sent = [];
+        $publisher = new class($sent, $reject) implements EventPublisher
+        {
+            public function __construct(public array &$sent, public array &$reject) {}
+
+            public function publish(string $key, array $envelope, array $headers): void
+            {
+                if (in_array($envelope['event_id'], $this->reject, true)) {
+                    throw new \RuntimeException('broker recusou');
+                }
+                $this->sent[] = $envelope['event_id'];
+            }
+        };
+        $relay = new OutboxRelay($tx, $publisher);
+
+        $result = $relay->drain(5);
+
+        $this->assertSame(3, $result->published);
+        $this->assertSame(2, $result->failed);
+        $this->assertSame([$a[0], $b[0], $b[1]], $sent);
+
+        // Com o papel da aplicação (RLS), cada tenant vê as próprias linhas: attempts sobe só na recusada.
+        foreach ([[self::A, $a], [self::B, $b]] as [$tenant, $ids]) {
+            $rows = $tx->run($tenant, fn () => OutboxMessage::query()->whereIn('id', $ids)->get()->keyBy('id'));
+            foreach ($ids as $id) {
+                $this->assertSame(in_array($id, $reject, true) ? 1 : 0, $rows[$id]->attempts, "attempts de {$id}");
+            }
+        }
+        $recusadaA = $tx->run(self::A, fn () => OutboxMessage::find($a[1]));
+        $this->assertNull($recusadaA->published_at);
+        $this->assertStringContainsString('broker recusou', $recusadaA->last_error);
+        $this->assertNull($tx->run(self::A, fn () => OutboxMessage::find($a[2]))->published_at, 'ordem por tenant');
+        $this->assertNull($tx->run(self::B, fn () => OutboxMessage::find($b[3]))->published_at, 'ordem por tenant');
+
+        $reject = [];
+        $sent = [];
+        do {
+            $published = $relay->drain(5)->published;
+        } while ($published > 0);
+        $this->assertSame([...array_slice($a, 1), ...array_slice($b, 2)], $this->byTenantOrder($sent, $a, $b));
+    }
+
+    /**
+     * @param  list<string>  $sent
+     * @return list<string> os ids de A e depois os de B, cada tenant na ordem em que saiu
+     */
+    private function byTenantOrder(array $sent, array $a, array $b): array
+    {
+        return [...array_values(array_filter($sent, fn ($id) => in_array($id, $a, true))), ...array_values(array_filter($sent, fn ($id) => in_array($id, $b, true)))];
+    }
 }

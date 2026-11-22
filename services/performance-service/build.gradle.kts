@@ -12,10 +12,6 @@ plugins {
 group = "com.peopleplatform"
 version = "0.2.0"
 
-// O BOM do Spring Boot 3.5 fixa o Kotlin em 1.9.x e o dependency-management aplica essa versão a todo
-// o classpath, inclusive ao kotlin-compiler-embeddable do ktlint (que precisa de 2.x). Alinha ao plugin.
-extra["kotlin.version"] = "2.1.21"
-
 // O Testcontainers do BOM (1.21.3) não negocia a API do Docker 29 dos runners (docker-java com API antiga
 // demais); a 1.21.4 traz a correção. Mantém a linha 1.x, que o spring-boot-testcontainers 3.5 espera.
 extra["testcontainers.version"] = "1.21.4"
@@ -30,6 +26,11 @@ kotlin {
         allWarningsAsErrors.set(true)
         freeCompilerArgs.addAll("-Xjsr305=strict")
     }
+}
+
+// O dependency-management leva o Kotlin 2.1 ao classpath do ktlint, e o padrão do plugin (1.0.1) só roda com 1.9.
+ktlint {
+    version.set("1.5.0")
 }
 
 dependencies {

@@ -193,14 +193,28 @@ class CalibrationFlowIT : IntegrationTestBase() {
         "min_justification_length" to 10,
     )
 
+    private fun sessionHighFrom(s: Scenario) =
+        api.get("/v1/calibration-sessions/${s.sessionId}", s.manager).get("policy").get("performance")
+            .get("high_from").asText()
+
     @Test
     fun `politica do tenant vale para sessoes abertas depois e nao altera sessao em andamento`() {
         val tenant = newTenant()
         val admin = Person(tenant, ADMIN)
         assertEquals("3.75", api.get("/v1/nine-box/policy", admin).get("performance").get("high_from").asText())
+        // Sessão aberta com a política padrão.
+        val before = Scenario(api, tenant)
+        before.runUntilCalibrationOpen()
+        assertEquals("3.75", sessionHighFrom(before))
         api.put("/v1/nine-box/policy", admin, policyBody("2", "3"))
         assertEquals("3", api.get("/v1/nine-box/policy", admin).get("performance").get("high_from").asText())
         api.put("/v1/nine-box/policy", admin, policyBody("4", "3"), expect = 422)
+        // A sessão em andamento mantém a política com que foi aberta; uma sessão aberta depois usa a nova.
+        assertEquals("3.75", sessionHighFrom(before))
+        val after = Scenario(api, tenant)
+        after.runUntilCalibrationOpen()
+        assertEquals("3", sessionHighFrom(after))
+        assertEquals("3.75", sessionHighFrom(before))
         // Outro tenant continua com o padrão.
         val other = Person(newTenant(), ADMIN)
         assertEquals("3.75", api.get("/v1/nine-box/policy", other).get("performance").get("high_from").asText())

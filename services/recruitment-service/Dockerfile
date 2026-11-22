@@ -2,7 +2,7 @@
 # O estágio de dependências usa o mesmo PHP e as mesmas extensões da imagem final: o composer
 # confere ext-* e versão do PHP contra o composer.lock (ext-bcmath vem do longlang/phpkafka).
 FROM php:8.4.12-cli-alpine3.22 AS vendor
-RUN docker-php-ext-install bcmath
+RUN apk add --no-cache unzip git && docker-php-ext-install bcmath
 COPY --from=composer:2.8.12 /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 COPY composer.json composer.lock ./

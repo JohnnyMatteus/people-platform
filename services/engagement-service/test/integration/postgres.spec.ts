@@ -278,6 +278,8 @@ describe('exclusão de titular no Postgres real, com o papel da aplicação', ()
     for (const tenant of [TENANT_A, TENANT_B]) {
       await social.giveFeedback(principal(subject, tenant), bystander, 'bom trabalho');
       await social.giveFeedback(principal(bystander, tenant), subject, 'obrigado');
+      // Sem o titular em nenhuma ponta: é o que precisa sobreviver à exclusão.
+      await social.giveFeedback(principal(bystander, tenant), CARLA, 'boa entrega');
       await social.praise(principal(subject, tenant), [bystander], 'valeu', []);
       await social.praise(principal(bystander, tenant), [subject, CARLA], 'ótimo time', []);
       await new OneOnOneService(d).schedule(principal(subject, tenant, ['manager']), bystander, new Date('2026-12-01T10:00:00Z'));

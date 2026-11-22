@@ -239,12 +239,14 @@ func TestErasure_RealDatabaseWithTheApplicationRole(t *testing.T) {
 	}
 
 	// O papel da aplicação não pode apagar direto: a imutabilidade é proposital.
+	// O erro cru: InTenant traduz 42501 para ErrNotFound e esconderia a causa.
+	var raw error
 	err := NewStore(appPool).InTenant(ctx, tenantA, func(tx app.Tx) error {
-		_, err := tx.(*txn).tx.Exec(ctx, `DELETE FROM enrollments`)
-		return err
+		_, raw = tx.(*txn).tx.Exec(ctx, `DELETE FROM enrollments`)
+		return raw
 	})
-	if err == nil || !strings.Contains(err.Error(), "permission denied") {
-		t.Fatalf("DELETE direto pelo papel da aplicação deveria ser negado: %v", err)
+	if err == nil || raw == nil || !strings.Contains(raw.Error(), "permission denied") {
+		t.Fatalf("DELETE direto pelo papel da aplicação deveria ser negado: %v (cru: %v)", err, raw)
 	}
 
 	event := uuid.New()

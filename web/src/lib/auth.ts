@@ -17,9 +17,15 @@ const manager = new UserManager({
 const user = ref<User | null>(null)
 const ready = ref(false)
 
-manager.events.addUserLoaded((u) => (user.value = u))
-manager.events.addUserUnloaded(() => (user.value = null))
-manager.events.addAccessTokenExpired(() => (user.value = null))
+manager.events.addUserLoaded((u) => {
+  user.value = u
+})
+manager.events.addUserUnloaded(() => {
+  user.value = null
+})
+manager.events.addAccessTokenExpired(() => {
+  user.value = null
+})
 
 export async function restoreSession() {
   user.value = await manager.getUser()

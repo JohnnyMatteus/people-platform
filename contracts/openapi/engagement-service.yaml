@@ -17,7 +17,7 @@ info:
 servers:
   - url: http://localhost:8000/engagement
     description: Gateway local (KrakenD)
-  - url: http://localhost:8082
+  - url: http://localhost:8083
     description: Serviço direto (desenvolvimento)
 security:
   - bearerAuth: []

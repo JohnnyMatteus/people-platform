@@ -22,4 +22,6 @@ make install && make lint && make test-unit   # sem Docker
 make test                                     # inclui Postgres real (testcontainers)
 ```
 
+Na raiz: `make engagement-service-up` (porta 8083 no host, `ENGAGEMENT_SERVICE_PORT`).
+
 Variáveis: `DATABASE_URL`, `KAFKA_BROKERS`, `OIDC_ISSUER`, `OIDC_JWKS_URL`, `OIDC_AUDIENCE`, `HTTP_PORT`, `OUTBOX_INTERVAL_MS`; a migração usa `DATABASE_MIGRATION_URL` (usuário dono do esquema).

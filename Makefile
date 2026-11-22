@@ -10,7 +10,7 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile analytics-ai-service
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
 GRADLE         := docker run --rm -v "$(CURDIR)/services/performance-service":/home/gradle/project \
@@ -119,3 +119,14 @@ engagement-service-build: ## Compila o TypeScript
 
 engagement-service-up: ## Sobe o núcleo e o engagement-service (migração inclusa)
 	$(COMPOSE) $(PROFILES_CORE) --profile engagement-service up -d --build --wait
+
+# --------------------------------------------------- analytics-ai-service
+.PHONY: analytics-ai-service-lint analytics-ai-service-test analytics-ai-service-up
+analytics-ai-service-lint: ## ruff + mypy (precisa de make venv no serviço)
+	$(MAKE) -C services/analytics-ai-service lint
+
+analytics-ai-service-test: ## Testes unitários (LLM falso, sem rede)
+	$(MAKE) -C services/analytics-ai-service test
+
+analytics-ai-service-up: ## Sobe o núcleo e o analytics-ai-service
+	$(COMPOSE) $(PROFILES_CORE) --profile analytics-ai-service up -d --build --wait

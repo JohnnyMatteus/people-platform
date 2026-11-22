@@ -41,8 +41,7 @@ Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pront
 | [`services/engagement-service`](services/engagement-service) | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | ✅ |
 | [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI | 🟡 núcleo de domínio |
 | [`services/recruitment-service`](services/recruitment-service) | PHP + Laravel | ATS: vagas, candidaturas, pipeline por tenant, entrevistas, scorecards, `CandidatoContratado` | ✅ |
-| `services/engagement-service` | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | 📝 [contrato](contracts/openapi/engagement-service.yaml) |
-| `services/analytics-ai-service` | Python + FastAPI | People analytics e recursos de IA | 📝 [contrato](contracts/openapi/analytics-ai-service.yaml) |
+| [`services/analytics-ai-service`](services/analytics-ai-service) | Python + FastAPI | People analytics e recursos de IA | 🟡 consumo de eventos e IA com guardas |
 | `services/learning-service` | a definir | Aprendizagem (LXM) | 📋 |
 | `web/` | Vue 3 | Front-end white label | 📋 |
 
@@ -98,12 +97,14 @@ Pré-requisitos: Docker com Compose v2, Go 1.26+ e Node 20+ (só para o lint de 
 cp .env.example .env          # opcional: os padrões do compose já funcionam
 make up                       # núcleo: Postgres, Kafka, Keycloak, gateway, LocalStack, Mailpit
 make tenant-service-up        # build + migração + tenant-service
-make engagement-service-up    # build + migração + engagement-service (porta 8082)
+make recruitment-service-up   # build + migração + relay + recruitment-service (porta 8082)
+make engagement-service-up    # build + migração + engagement-service (porta 8083)
+make analytics-ai-service-up  # build + analytics-ai-service (porta 8084)
 make seed                     # os dois tenants fictícios (IDs iguais aos do realm do Keycloak)
 make smoke                    # fluxo ponta a ponta pelo gateway com tokens reais
 ```
 
-Para subir também observabilidade e ferramentas: `make up-all`. Use `make ps` para ver a saúde dos contêineres e `make down` para parar tudo (ou `make clean` para apagar também os volumes).
+Para subir também observabilidade e ferramentas: `make up-all`. Portas no host: gateway 8000, tenant 8081, recruitment 8082, engagement 8083, analytics-ai 8084 (variáveis `*_SERVICE_PORT` no `.env`). Use `make ps` para ver a saúde dos contêineres e `make down` para parar tudo (ou `make clean` para apagar também os volumes).
 
 | Endereço | O quê | Credencial (só dev) |
 | --- | --- | --- |

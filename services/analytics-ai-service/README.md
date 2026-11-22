@@ -26,6 +26,8 @@ adapters/    memory (read models), http (FastAPI + JWT), kafka_consumer, openai_
 make venv && make lint && make test
 ```
 
+Na raiz: `make analytics-ai-service-up` (porta 8084 no host, `ANALYTICS_AI_SERVICE_PORT`).
+
 Os testes usam fixtures validadas contra `contracts/asyncapi/schemas` e um LLM falso; não acessam a rede.
 
 ## Variáveis de ambiente

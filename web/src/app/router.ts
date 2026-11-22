@@ -18,6 +18,7 @@ export const router = createRouter({
     { path: '/', redirect: '/avaliacoes' },
     { path: '/nine-box', name: 'nine-box', component: () => import('@/features/ninebox/NineBoxView.vue'), meta: { roles: ['manager', 'tenant-admin'], title: 'Nine box' } },
     { path: '/avaliacoes', name: 'avaliacoes', component: () => import('@/features/evaluation/EvaluationView.vue'), meta: { title: 'Avaliações' } },
+    { path: '/metas', name: 'metas', component: () => import('@/features/okr/OkrView.vue'), meta: { title: 'Metas' } },
     { path: '/pdi', name: 'pdi', component: () => import('@/features/pdi/PdiView.vue'), meta: { title: 'PDI' } },
     { path: '/sucessao', name: 'sucessao', component: () => import('@/features/succession/SuccessionView.vue'), meta: { roles: ['manager', 'tenant-admin'], title: 'Sucessão' } },
     { path: '/recrutamento', name: 'recrutamento', component: () => import('@/features/recruitment/RecruitmentView.vue'), meta: { roles: ['manager', 'tenant-admin'], title: 'Recrutamento' } },

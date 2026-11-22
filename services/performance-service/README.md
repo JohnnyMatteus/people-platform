@@ -2,22 +2,19 @@
 
 É o contexto de **Desempenho** da People Platform: avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI.
 
-## Status desta rodada
+## Status
 
-Por enquanto existe só o **núcleo de domínio**, em Kotlin puro, sem Spring, JPA ou Kafka ([ADR 0011](../../docs/adr/0011-nucleo-de-dominio-antes-do-framework.md)):
+Núcleo de domínio em Kotlin puro ([ADR 0011](../../docs/adr/0011-nucleo-de-dominio-antes-do-framework.md)) com adaptadores Spring Boot em volta:
 
 | Pacote | Conteúdo |
 | --- | --- |
-| `domain.shared` | IDs (`TenantId`, `EmployeeId`, `CycleId`), `DomainException`, guarda de tenant |
-| `domain.ninebox` | `NineBoxPolicy` (escala e limiares por tenant), `NineBoxClassifier`, `Quadrant`, `CalibrationSession`, `NineBoxHistory`, evento `NineBoxCalibrated` |
-| `domain.succession` | `CriticalPosition`, `SuccessionPlan` (força do banco), `ReadinessAdvisor` (sugestão de prontidão) |
+| `domain.*` | Nine box (política, classificador, calibração, histórico), sucessão, avaliação e PDI, sem Spring, JPA ou Kafka |
+| `app` | Casos de uso: ciclos, avaliações, calibração, sucessão e PDI |
+| `adapters.web` | Controllers conforme [`contracts/openapi/performance-service.yaml`](../../contracts/openapi/performance-service.yaml), JWT (`tenant_id`, `sub`, papéis) e problem+json |
+| `adapters.persistence` | JPA, migrações Flyway e RLS por `app.tenant_id` |
+| `adapters.messaging` | Outbox e relay para `people.performance.events.v1` (`NineBoxCalibrado`, `AvaliacaoConcluida`) |
 
-A **API HTTP (Spring Boot)** ainda não existe. O contrato que ela vai seguir já está em [`contracts/openapi/performance-service.yaml`](../../contracts/openapi/performance-service.yaml). Na próxima rodada, entram como adaptadores em volta deste núcleo:
-
-- controllers;
-- persistência com RLS;
-- consumo de `TenantCriado` e `AvaliacaoConcluida`;
-- publicação de `NineBoxCalibrado` via outbox.
+Ainda não existem: consumo de `TenantCriado` e `AvaliacaoConcluida`, OKRs e assessment.
 
 O raciocínio das regras está no [roteiro de nine box e calibração](../../docs/roteiros/nine-box-e-calibracao.md).
 
@@ -27,8 +24,9 @@ Java e Gradle não precisam estar instalados: tudo roda na imagem `gradle:8.14.3
 
 ```bash
 make performance-service-lint    # ktlint
-make performance-service-test    # JUnit 5 (parametrizados)
+make performance-service-test    # JUnit 5 (domínio e contrato; sem Docker)
 make performance-service-build   # compila e empacota
+make performance-service-up      # sobe no compose (porta 8085, atrás do gateway em /performance)
 ```
 
 Sem o Makefile da raiz, o equivalente é:
@@ -37,3 +35,5 @@ Sem o Makefile da raiz, o equivalente é:
 docker run --rm -v "$PWD":/home/gradle/project -w /home/gradle/project gradle:8.14.3-jdk21 \
   gradle --no-daemon ktlintCheck test build
 ```
+
+Os testes de integração (Postgres real via Testcontainers: RLS, vazamento entre tenants, outbox, contrato) ficam na tarefa `integrationTest` e precisam de Docker; o CI roda as duas.

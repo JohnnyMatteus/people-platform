@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
 
 permissions:
@@ -23,7 +23,11 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       tenant-service: ${{ steps.filter.outputs.tenant-service }}
       performance-service: ${{ steps.filter.outputs.performance-service }}
+      recruitment-service: ${{ steps.filter.outputs.recruitment-service }}
+      analytics-ai-service: ${{ steps.filter.outputs.analytics-ai-service }}
       platform: ${{ steps.filter.outputs.platform }}
+      web: ${{ steps.filter.outputs.web }}
+      engagement-service: ${{ steps.filter.outputs.engagement-service }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -40,6 +44,23 @@ jobs:
               - '.github/workflows/ci.yml'
             performance-service:
               - 'services/performance-service/**'
+              - 'contracts/openapi/performance-service.yaml'
+              - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            recruitment-service:
+              - 'services/recruitment-service/**'
+              - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            engagement-service:
+              - 'services/engagement-service/**'
+              - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            analytics-ai-service:
+              - 'services/analytics-ai-service/**'
+              - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'web/**'
               - '.github/workflows/ci.yml'
             platform:
               - 'docker-compose*.yml'
@@ -89,16 +110,195 @@ jobs:
     needs: changes
     if: needs.changes.outputs.performance-service == 'true'
     runs-on: ubuntu-latest
-    # Mesma imagem usada localmente (Java e Gradle não são pré-requisitos da máquina).
-    container:
-      image: gradle:8.14.3-jdk21
     defaults:
       run:
         working-directory: services/performance-service
     steps:
       - uses: actions/checkout@v4
-      - name: Lint, testes e build (ktlint + JUnit)
-        run: gradle --no-daemon --console=plain ktlintCheck test build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Lint (ktlint)
+        id: lint
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain ktlintCheck 2>&1 | tee "$RUNNER_TEMP/perf-lint.log"
+      - name: Anotações de erro (performance-service ktlint)
+        if: ${{ failure() && steps.lint.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service ktlint" "$RUNNER_TEMP/perf-lint.log" '\.kt:[0-9]+(:[0-9]+)?[: ]' 40
+      # Os passos seguintes rodam mesmo com o lint vermelho, para revelar todos os erros de uma vez; o job continua falhando.
+      - name: Testes unitários, de contrato e build
+        id: unit
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain --continue test build 2>&1 | tee "$RUNNER_TEMP/perf-unit.log"
+      - name: Anotações de erro (performance-service test e build)
+        if: ${{ failure() && steps.unit.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service test e build" "$RUNNER_TEMP/perf-unit.log" '^e: |FAILED|Exception|AssertionError|What went wrong|BUILD FAILED|error:' 40
+      - name: Testes de integração (Postgres real via testcontainers, RLS e outbox)
+        id: integration
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain integrationTest 2>&1 | tee "$RUNNER_TEMP/perf-it.log"
+      - name: Anotações de erro (performance-service integrationTest)
+        if: ${{ failure() && steps.integration.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service integrationTest" "$RUNNER_TEMP/perf-it.log" '^e: |FAILED|Exception|AssertionError|What went wrong|BUILD FAILED|error:' 40
+      - name: Imagem Docker
+        id: image
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          docker build --progress=plain -t people-platform/performance-service:ci . 2>&1 | tee "$RUNNER_TEMP/perf-image.log"
+      - name: Anotações de erro (performance-service imagem)
+        if: ${{ failure() && steps.image.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service imagem" "$RUNNER_TEMP/perf-image.log" 'ERROR|rror:|Problem|failed|FAILED' 40
+
+  recruitment-service:
+    needs: changes
+    if: needs.changes.outputs.recruitment-service == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: services/recruitment-service
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, pdo_sqlite, sodium
+          coverage: none
+          tools: composer:v2
+      - name: Dependências
+        run: composer install --no-interaction --prefer-dist
+      - name: Lint (Pint)
+        run: make lint
+      - name: Testes unitários e de API (SQLite em memória)
+        run: make test-unit
+      - name: Banco como no compose (dono, papel da aplicação sem BYPASSRLS)
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE recruitment_service_owner LOGIN PASSWORD 'ci';
+          CREATE DATABASE recruitment_service OWNER recruitment_service_owner;
+          CREATE ROLE recruitment_app NOLOGIN;
+          CREATE ROLE recruitment_service_app LOGIN PASSWORD 'ci' IN ROLE recruitment_app;
+          SQL
+          psql -h localhost -U postgres -d recruitment_service -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO recruitment_service_owner; REVOKE ALL ON SCHEMA public FROM PUBLIC;"
+      - name: Vazamento entre tenants (Postgres real com RLS)
+        env:
+          RECRUITMENT_PG_TESTS: "1"
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: recruitment_service
+          DB_USERNAME: recruitment_service_app
+          DB_PASSWORD: ci
+          DB_MIGRATION_USERNAME: recruitment_service_owner
+          DB_MIGRATION_PASSWORD: ci
+        run: php artisan test --testsuite=Integration
+      - name: Imagem Docker
+        id: image
+        run: |
+          set -o pipefail
+          docker build --progress=plain -t people-platform/recruitment-service:ci . 2>&1 | tee "$RUNNER_TEMP/recruitment-image.log"
+      - name: Anotações de erro (recruitment-service imagem)
+        if: ${{ failure() && steps.image.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "recruitment-service imagem" "$RUNNER_TEMP/recruitment-image.log" 'ERROR|rror|Problem|requires|does not|failed|FAILED' 40
+
+  engagement-service:
+    needs: changes
+    if: needs.changes.outputs.engagement-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/engagement-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/engagement-service/package-lock.json
+      - run: make install
+      - name: Lint (eslint + tsc)
+        run: make lint
+      - name: Testes (unitários + Postgres real via testcontainers)
+        id: test
+        run: |
+          set -o pipefail
+          make test 2>&1 | tee "$RUNNER_TEMP/engagement-test.log"
+      - name: Anotações de erro (engagement-service testes)
+        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "engagement-service testes" "$RUNNER_TEMP/engagement-test.log" '●|✕|FAIL |Expected|Received|rror|Tests:|Cannot|Docker|container' 40
+      - name: Build
+        run: make build
+      - name: Imagem Docker
+        run: docker build -t people-platform/engagement-service:ci .
+
+  analytics-ai-service:
+    needs: changes
+    if: needs.changes.outputs.analytics-ai-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/analytics-ai-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/analytics-ai-service/pyproject.toml
+      - name: Instala dependências
+        run: pip install -e ".[dev]"
+      - name: Lint (ruff + mypy)
+        run: ruff check . && ruff format --check . && mypy src
+      - name: Testes (LLM falso, fixtures dos schemas)
+        run: pytest -q
+      - name: Imagem Docker
+        run: docker build -t people-platform/analytics-ai-service:ci .
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Testes (vitest)
+        run: npm test
+      - name: Typecheck e build
+        run: npm run build
 
   platform:
     needs: changes
@@ -107,10 +307,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido
         run: python3 -m json.tool infra/keycloak/realm-people.json > /dev/null
       - name: ShellCheck nos scripts
         run: shellcheck scripts/*.sh init/aws/*.sh infra/postgres/init/*.sh
+
+  # Agregador: um único check obrigatório. Jobs pulados pelo filtro de caminhos contam como sucesso.
+  ci-ok:
+    name: CI ok
+    needs: [changes, contracts, tenant-service, performance-service, recruitment-service, engagement-service, analytics-ai-service, web, platform]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Falha se algum job falhou ou foi cancelado
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac

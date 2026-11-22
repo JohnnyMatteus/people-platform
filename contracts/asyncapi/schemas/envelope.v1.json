@@ -4,15 +4,55 @@
   "title": "Envelope de evento v1",
   "description": "Formato comum a todos os eventos da plataforma (ADR 0005). event_id é a chave de deduplicação dos consumidores.",
   "type": "object",
-  "required": ["event_id", "event_type", "event_version", "tenant_id", "aggregate_id", "occurred_at", "producer", "data"],
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "tenant_id",
+    "aggregate_id",
+    "occurred_at",
+    "producer",
+    "data"
+  ],
   "properties": {
-    "event_id": { "type": "string", "format": "uuid" },
-    "event_type": { "type": "string", "pattern": "^[A-Z][A-Za-z]+$" },
-    "event_version": { "type": "integer", "minimum": 1 },
-    "tenant_id": { "type": "string", "format": "uuid" },
-    "aggregate_id": { "type": "string", "format": "uuid" },
-    "occurred_at": { "type": "string", "format": "date-time" },
-    "producer": { "type": "string", "enum": ["tenant-service", "performance-service", "recruitment-service", "engagement-service", "analytics-ai-service", "learning-service"] },
-    "data": { "type": "object" }
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z]+$"
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tenant_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "type": "string",
+      "enum": [
+        "tenant-service",
+        "performance-service",
+        "recruitment-service",
+        "engagement-service",
+        "analytics-ai-service",
+        "learning-service",
+        "people-directory"
+      ]
+    },
+    "data": {
+      "type": "object"
+    }
   }
 }

@@ -3,6 +3,9 @@
 #   observability   OpenTelemetry Collector, Prometheus, Grafana, Jaeger
 #   tools           Kafka UI, Adminer
 #   tenant-service  o serviço Go e o job de migração dele
+#   recruitment-service  o ATS (PHP + Laravel), o job de migração e o relay da outbox
+#   engagement-service  o serviço NestJS e o job de migração dele
+#   analytics-ai-service  o serviço Python de analytics e IA
 # Uso: make up (core), make up-all (core + observability + tools + serviços). Senhas são só de dev.
 name: people-platform
 
@@ -79,7 +82,7 @@ services:
     command:
       - |
         set -euo pipefail
-        for topic in people.tenant.events.v1 people.performance.events.v1 people.recruitment.events.v1 people.engagement.events.v1; do
+        for topic in people.tenant.events.v1 people.performance.events.v1 people.recruitment.events.v1 people.engagement.events.v1 people.directory.events.v1; do
           kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$topic" --partitions 6 --replication-factor 1
         done
     restart: "no"
@@ -225,6 +228,144 @@ services:
       test: ["CMD", "/tenant-service", "healthcheck"]
     networks: [people-platform-net]
 
+  # ------------------------------------------------- recruitment-service
+  recruitment-service-migrate:
+    build:
+      context: ./services/recruitment-service
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "migrate", "--database=migrate", "--force"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &recruitment-env
+      APP_KEY: ${RECRUITMENT_APP_KEY:-base64:yXBDhbE0qFhUakEUjRuJ0a7s28s3EKZZaIEmdsOQgPY=}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: recruitment_service
+      DB_USERNAME: recruitment_service_app
+      DB_PASSWORD: ${RECRUITMENT_DB_APP_PASSWORD:-dev-only-change-me}
+      DB_MIGRATION_USERNAME: recruitment_service_owner
+      DB_MIGRATION_PASSWORD: ${RECRUITMENT_DB_OWNER_PASSWORD:-dev-only-change-me}
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      S3_RESUMES_BUCKET: ${S3_RESUMES_BUCKET:-people-platform-recruitment-resumes}
+      S3_PRESIGN_ENDPOINT: http://localhost:${LOCALSTACK_PORT:-4566}
+      KAFKA_BROKERS: kafka:9092
+      CACHE_STORE: file
+      SESSION_DRIVER: array
+      LOG_CHANNEL: stderr
+    restart: "no"
+    networks: [people-platform-net]
+
+  recruitment-service:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    environment: *recruitment-env
+    ports:
+      - "${RECRUITMENT_SERVICE_PORT:-8082}:8080"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/up') === false ? 1 : 0);"]
+    networks: [people-platform-net]
+
+  # Publica a outbox no Kafka (CandidatoContratado em people.recruitment.events.v1).
+  recruitment-service-relay:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "outbox:relay"]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment: *recruitment-env
+    restart: unless-stopped
+
+  # Consome TenantCriado (people.tenant.events.v1) e prepara pipeline e configurações do tenant.
+  recruitment-service-tenant-consumer:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "tenant-events:consume"]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment: *recruitment-env
+    restart: unless-stopped
+
+  # ---------------------------------------------------- analytics-ai-service
+  analytics-ai-service:
+    build:
+      context: ./services/analytics-ai-service
+    image: people-platform/analytics-ai-service:dev
+    profiles: [analytics-ai-service]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      HTTP_PORT: "8000"
+      KAFKA_BROKERS: kafka:9092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-dev-only-change-me}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    ports:
+      - "${ANALYTICS_AI_SERVICE_PORT:-8084}:8000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz')"]
+    networks: [people-platform-net]
+
+  # ------------------------------------------------- performance-service (perfil performance-service)
+  # As migrações Flyway rodam na subida, com o dono do esquema; a aplicação usa o papel sem BYPASSRLS.
+  performance-service:
+    build:
+      context: ./services/performance-service
+    image: people-platform/performance-service:dev
+    profiles: [performance-service]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/performance_service
+      DATABASE_USER: performance_service_app
+      DATABASE_PASSWORD: ${PERFORMANCE_DB_APP_PASSWORD:-dev-only-change-me}
+      DATABASE_MIGRATION_URL: jdbc:postgresql://postgres:5432/performance_service
+      DATABASE_MIGRATION_USER: performance_service_owner
+      DATABASE_MIGRATION_PASSWORD: ${PERFORMANCE_DB_OWNER_PASSWORD:-dev-only-change-me}
+      KAFKA_BROKERS: kafka:9092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+    ports:
+      - "${PERFORMANCE_SERVICE_PORT:-8085}:8080"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/actuator/health/readiness"]
+    networks: [people-platform-net]
+
   # -------------------------------------------------------- observability
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.130.0
@@ -320,6 +461,45 @@ services:
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080') === false ? 1 : 0);"]
+    networks: [people-platform-net]
+
+  # ------------------------------------------------- engagement-service (perfil engagement-service)
+  engagement-service-migrate:
+    build:
+      context: ./services/engagement-service
+    image: people-platform/engagement-service:dev
+    profiles: [engagement-service]
+    command: ["node", "dist/migrate.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_MIGRATION_URL: postgres://engagement_service_owner:${ENGAGEMENT_DB_OWNER_PASSWORD:-dev-only-change-me}@postgres:5432/engagement_service
+    restart: "no"
+    networks: [people-platform-net]
+
+  engagement-service:
+    image: people-platform/engagement-service:dev
+    profiles: [engagement-service]
+    depends_on:
+      engagement-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgres://engagement_service_app:${ENGAGEMENT_DB_APP_PASSWORD:-dev-only-change-me}@postgres:5432/engagement_service
+      KAFKA_BROKERS: kafka:9092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+    ports:
+      - "${ENGAGEMENT_SERVICE_PORT:-8083}:8080"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
     networks: [people-platform-net]
 
 volumes:

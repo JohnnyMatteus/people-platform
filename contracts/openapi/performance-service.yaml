@@ -4,9 +4,10 @@ info:
   version: 0.1.0
   summary: Avaliações, calibração, nine box, sucessão, OKRs e PDI.
   description: |
-    Contrato-alvo do performance-service. Nesta rodada só o núcleo de domínio (Kotlin puro) está
-    implementado; a camada HTTP (Spring Boot) segue este contrato na próxima rodada (ADR 0011).
-    O tenant vem sempre da claim `tenant_id` do token, nunca de parâmetro.
+    Contrato do performance-service (Spring Boot sobre o núcleo de domínio Kotlin, ADR 0011).
+    O tenant vem sempre da claim `tenant_id` do token, nunca de parâmetro; a identidade da pessoa
+    é a claim `sub`, que é também o `employee_id` da própria pessoa.
+    Papéis (claim `realm_access.roles`): `employee`, `manager`, `tenant-admin`.
   license:
     name: MIT
     identifier: MIT
@@ -24,7 +25,11 @@ tags:
   - name: succession
     description: Posições críticas e mapas de sucessão.
   - name: cycles
-    description: Ciclos de avaliação (esboço).
+    description: Ciclos de avaliação e avaliações (autoavaliação e gestor).
+  - name: pdi
+    description: Plano de desenvolvimento individual.
+  - name: people
+    description: Quem sou eu e o cadastro mínimo de colaboradores do tenant.
 paths:
   /v1/nine-box/policy:
     get:
@@ -281,7 +286,7 @@ paths:
     get:
       tags: [succession]
       operationId: suggestReadiness
-      summary: Sugestão de prontidão a partir do último nine box e do tempo na função.
+      summary: Sugestão de prontidão a partir do último nine box e do tempo na função (`role_since` do cadastro).
       responses:
         "200":
           description: Sugestão (null quando o potencial é baixo).
@@ -295,32 +300,291 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/Readiness"
                       - type: "null"
-  /v1/cycles:
+  /v1/me:
     get:
-      tags: [cycles]
-      operationId: listCycles
-      summary: Esboço - lista ciclos de avaliação (auto, gestor, pares, 180/360).
+      tags: [people]
+      operationId: getMe
+      summary: Identidade e papéis do chamador, lidos do token.
       responses:
         "200":
-          description: Ciclos.
+          description: Chamador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /v1/employees:
+    get:
+      tags: [people]
+      operationId: listEmployees
+      summary: Colaboradores cadastrados no tenant (gestor ou admin).
+      responses:
+        "200":
+          description: Colaboradores.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    name:
-                      type: string
-                    type:
-                      type: string
-                      enum: [self, manager, peers, "180", "360"]
-                    status:
-                      type: string
-                      enum: [draft, open, consolidating, calibration, closed]
+                  $ref: "#/components/schemas/Employee"
+    post:
+      tags: [people]
+      operationId: upsertEmployee
+      summary: Cadastra ou atualiza um colaborador (gestor ou admin). O id é o `sub` do token da pessoa.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Employee"
+      responses:
+        "200":
+          description: Colaborador gravado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/cycles:
+    get:
+      tags: [cycles]
+      operationId: listCycles
+      summary: Lista os ciclos de avaliação do tenant.
+      responses:
+        "200":
+          description: Ciclos, do mais recente ao mais antigo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cycle"
+    post:
+      tags: [cycles]
+      operationId: createCycle
+      summary: Cria um ciclo em rascunho (admin do tenant).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                type:
+                  $ref: "#/components/schemas/CycleType"
+      responses:
+        "201":
+          description: Ciclo criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/cycles/{cycleId}/open:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    post:
+      tags: [cycles]
+      operationId: openCycle
+      summary: Abre o ciclo para receber avaliações (admin do tenant).
+      responses:
+        "200":
+          description: Ciclo aberto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /v1/cycles/{cycleId}/evaluations:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    get:
+      tags: [cycles]
+      operationId: listEvaluationProgress
+      summary: Andamento das avaliações do ciclo por pessoa (gestor ou admin).
+      responses:
+        "200":
+          description: Andamento.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EvaluationProgress"
+  /v1/cycles/{cycleId}/evaluations/self:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    post:
+      tags: [cycles]
+      operationId: submitSelfEvaluation
+      summary: Autoavaliação da própria pessoa (employee_id vem do token).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelfEvaluationInput"
+      responses:
+        "201":
+          description: Autoavaliação registrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evaluation"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/cycles/{cycleId}/evaluations/manager:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    post:
+      tags: [cycles]
+      operationId: submitManagerEvaluation
+      summary: Avaliação do gestor, com nota de desempenho e de potencial. Quando a autoavaliação já existe, a avaliação é consolidada e AvaliacaoConcluida é publicado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagerEvaluationInput"
+      responses:
+        "201":
+          description: Avaliação registrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evaluation"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/cycles/{cycleId}/calibration-sessions/current:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    get:
+      tags: [nine-box]
+      operationId: getCycleCalibrationSession
+      summary: Sessão de calibração do ciclo, se já foi aberta.
+      responses:
+        "200":
+          description: Sessão.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationSession"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/employees/{employeeId}/pdi:
+    parameters:
+      - name: employeeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [pdi]
+      operationId: getPdi
+      summary: PDI da pessoa, com gaps da avaliação e sugestões a partir do nine box (a própria pessoa, gestor ou admin).
+      responses:
+        "200":
+          description: Plano.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pdi"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /v1/employees/{employeeId}/pdi/actions:
+    parameters:
+      - name: employeeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [pdi]
+      operationId: addPdiAction
+      summary: Adiciona uma ação ao PDI. Sugestões só entram no plano por este endpoint, com ação humana.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title, kind, due_on]
+              properties:
+                title:
+                  type: string
+                  minLength: 3
+                competency:
+                  type: string
+                kind:
+                  $ref: "#/components/schemas/PdiActionKind"
+                due_on:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Ação criada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PdiAction"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/pdi-actions/{actionId}:
+    parameters:
+      - name: actionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [pdi]
+      operationId: updatePdiActionStatus
+      summary: Avança o status da ação (PLANNED, IN_PROGRESS, DONE). Não volta de DONE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status:
+                  $ref: "#/components/schemas/PdiActionStatus"
+      responses:
+        "200":
+          description: Ação atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PdiAction"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     bearerAuth:
@@ -425,11 +689,13 @@ components:
           format: date-time
     CalibrationSession:
       type: object
-      required: [id, cycle_id, status, placements, distribution, warnings, adjustments]
+      required: [id, cycle_id, status, policy, placements, distribution, warnings, adjustments]
       properties:
         id:
           type: string
           format: uuid
+        policy:
+          $ref: "#/components/schemas/NineBoxPolicy"
         cycle_id:
           type: string
           format: uuid
@@ -445,6 +711,12 @@ components:
               employee_id:
                 type: string
                 format: uuid
+              employee_name:
+                type: string
+              performance_score:
+                type: string
+              potential_score:
+                type: string
               original:
                 $ref: "#/components/schemas/Quadrant"
               current:
@@ -482,6 +754,8 @@ components:
         incumbent_id:
           type: string
           format: uuid
+        incumbent_name:
+          type: string
         bench_strength:
           type: string
           enum: [NONE, WEAK, ADEQUATE, STRONG]
@@ -494,5 +768,207 @@ components:
               employee_id:
                 type: string
                 format: uuid
+              employee_name:
+                type: string
               readiness:
                 $ref: "#/components/schemas/Readiness"
+    Me:
+      type: object
+      required: [employee_id, tenant_id, roles]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+    Employee:
+      type: object
+      required: [id, name, job_title, role_since]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 2
+        job_title:
+          type: string
+        role_since:
+          type: string
+          format: date
+    CycleType:
+      type: string
+      enum: [self, manager, peers, "180", "360"]
+    Cycle:
+      type: object
+      required: [id, name, type, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/CycleType"
+        status:
+          type: string
+          enum: [draft, open, calibration, closed]
+    CompetencyScore:
+      type: object
+      additionalProperties: false
+      required: [competency, score]
+      properties:
+        competency:
+          type: string
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+    SelfEvaluationInput:
+      type: object
+      additionalProperties: false
+      required: [performance_score, competencies]
+      properties:
+        performance_score:
+          type: string
+          description: Decimal em string, na escala do tenant.
+        competencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompetencyScore"
+        comment:
+          type: string
+    ManagerEvaluationInput:
+      type: object
+      additionalProperties: false
+      required: [employee_id, performance_score, potential_score, competencies]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        performance_score:
+          type: string
+        potential_score:
+          type: string
+        competencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompetencyScore"
+        comment:
+          type: string
+    Evaluation:
+      type: object
+      required: [id, cycle_id, employee_id, kind, performance_score, competencies, submitted_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        cycle_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [self, manager]
+        performance_score:
+          type: string
+        potential_score:
+          type: string
+        competencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompetencyScore"
+        comment:
+          type: string
+        submitted_at:
+          type: string
+          format: date-time
+    EvaluationProgress:
+      type: object
+      required: [employee_id, employee_name, self_submitted, manager_submitted, consolidated]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        employee_name:
+          type: string
+        self_submitted:
+          type: boolean
+        manager_submitted:
+          type: boolean
+        consolidated:
+          type: boolean
+    PdiActionKind:
+      type: string
+      enum: [COURSE, MENTORING, PROJECT, READING]
+    PdiActionStatus:
+      type: string
+      enum: [PLANNED, IN_PROGRESS, DONE]
+    PdiAction:
+      type: object
+      required: [id, employee_id, title, kind, due_on, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        competency:
+          type: string
+        kind:
+          $ref: "#/components/schemas/PdiActionKind"
+        due_on:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/PdiActionStatus"
+    Pdi:
+      type: object
+      required: [employee_id, gaps, actions, suggestions]
+      properties:
+        employee_id:
+          type: string
+          format: uuid
+        gaps:
+          type: array
+          description: Distância entre autoavaliação e avaliação do gestor por competência, do último ciclo consolidado.
+          items:
+            type: object
+            required: [competency, gap]
+            properties:
+              competency:
+                type: string
+              gap:
+                type: integer
+                minimum: 0
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PdiAction"
+        suggestions:
+          type: array
+          description: Só sugestões; nada entra no plano sem POST em /pdi/actions.
+          items:
+            type: object
+            required: [title, kind, reason]
+            properties:
+              title:
+                type: string
+              competency:
+                type: string
+              kind:
+                $ref: "#/components/schemas/PdiActionKind"
+              reason:
+                type: string

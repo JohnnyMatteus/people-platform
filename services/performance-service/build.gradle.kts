@@ -1,13 +1,20 @@
-// Nesta rodada o módulo contém só o núcleo de domínio (Kotlin puro, sem Spring), para que as
-// regras de nine box e sucessão sejam testadas sem framework. A camada Spring Boot (API HTTP,
-// JPA e consumo de eventos) entra na próxima rodada como adaptadores em volta deste núcleo.
+// O domínio (com.peopleplatform.performance.domain) continua Kotlin puro; Spring Boot, JPA e
+// Kafka ficam nos adaptadores em volta dele (ADR 0011).
 plugins {
     kotlin("jvm") version "2.1.21"
+    kotlin("plugin.spring") version "2.1.21"
+    kotlin("plugin.jpa") version "2.1.21"
+    id("org.springframework.boot") version "3.5.7"
+    id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "12.3.0"
 }
 
 group = "com.peopleplatform"
-version = "0.1.0"
+version = "0.2.0"
+
+// O Testcontainers do BOM (1.21.3) não negocia a API do Docker 29 dos runners (docker-java com API antiga
+// demais); a 1.21.4 traz a correção. Mantém a linha 1.x, que o spring-boot-testcontainers 3.5 espera.
+extra["testcontainers.version"] = "1.21.4"
 
 repositories {
     mavenCentral()
@@ -17,19 +24,64 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         allWarningsAsErrors.set(true)
+        freeCompilerArgs.addAll("-Xjsr305=strict")
     }
 }
 
+// O dependency-management leva o Kotlin 2.1 ao classpath do ktlint, e o padrão do plugin (1.0.1) só roda com 1.9.
+ktlint {
+    version.set("1.5.0")
+}
+
 dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+    runtimeOnly("org.postgresql:postgresql")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("com.networknt:json-schema-validator:1.5.8")
     testImplementation(kotlin("test"))
-    testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Integração (Postgres real via Testcontainers) roda em tarefa própria: precisa de Docker.
+        excludeTags("integration")
+    }
     testLogging {
         events("passed", "failed", "skipped")
     }
+}
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Testes com Postgres real (Testcontainers): RLS, vazamento entre tenants, outbox e contrato."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("integration") }
+    testLogging { events("passed", "failed", "skipped") }
+    shouldRunAfter(tasks.test)
+}
+
+tasks.bootJar {
+    archiveFileName.set("performance-service.jar")
+}
+
+tasks.jar {
+    enabled = false
 }

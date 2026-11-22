@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/colaborador-desligado.v1.json",
+  "title": "ColaboradorDesligado v1",
+  "description": "Um vínculo foi encerrado. Alimenta turnover e tempo de casa nos agregados. Sem motivo em texto livre nem dados de contato.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "event_type": {
+      "const": "ColaboradorDesligado"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "producer": {
+      "const": "people-directory"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "employee_id",
+        "terminated_on",
+        "area",
+        "unit",
+        "age_band"
+      ],
+      "properties": {
+        "employee_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "terminated_on": {
+          "type": "string",
+          "format": "date"
+        },
+        "voluntary": {
+          "type": "boolean"
+        },
+        "area": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "<25",
+            "25-34",
+            "35-44",
+            "45-54",
+            "55+",
+            "nao-informado"
+          ]
+        }
+      }
+    }
+  }
+}

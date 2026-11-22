@@ -36,6 +36,7 @@ make performance-service-test  # roda na imagem gradle:8.14.3-jdk21 (sem Java lo
 ## Estrutura
 
 - `services/tenant-service`: Go, hexagonal (`internal/domain`, `internal/app`, `internal/adapters/*`, `internal/platform/*`). Migrações SQL embutidas em `internal/adapters/postgres/migrations`.
+- `services/engagement-service`: TypeScript/NestJS, hexagonal (`src/domain` puro, `src/app` casos de uso e portas, `src/adapters/{http,postgres,kafka}`, `src/platform`). Migrações em `migrations/`; `make engagement-service-test-unit` roda sem Docker e `make engagement-service-test` inclui a integração (testcontainers).
 - `services/performance-service`: Kotlin. Só o núcleo de domínio puro em `com.peopleplatform.performance.domain` (nine box, calibração, histórico, sucessão). Spring Boot entra como adaptador; o domínio não importa framework.
 - `contracts/openapi`: um arquivo por serviço (completos: tenant e performance; os demais são esboços).
 - `contracts/asyncapi`: `people-platform.yaml` e `schemas/*.vN.json` (envelope comum).

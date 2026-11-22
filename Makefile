@@ -10,18 +10,20 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
-GRADLE         := docker run --rm -v "$(CURDIR)/services/performance-service":/home/gradle/project \
-                  -v people-platform-gradle-cache:/home/gradle/.gradle -w /home/gradle/project $(GRADLE_IMAGE) \
+# Monta a raiz do repositório: os testes do serviço leem contracts/ (../../contracts).
+GRADLE         := docker run --rm -v "$(CURDIR)":/work \
+                  -v people-platform-gradle-cache:/home/gradle/.gradle -w /work/services/performance-service $(GRADLE_IMAGE) \
                   gradle --no-daemon --console=plain
 SPECTRAL       := npx -y @stoplight/spectral-cli@6.15.0
 
 .PHONY: help up up-all down logs ps seed smoke test test-integration lint clean network \
         contracts-lint \
         tenant-service-lint tenant-service-test tenant-service-test-unit tenant-service-build tenant-service-up \
-        performance-service-lint performance-service-test performance-service-build
+        performance-service-lint performance-service-test performance-service-build performance-service-up \
+        engagement-service-lint engagement-service-test engagement-service-test-unit engagement-service-build engagement-service-up
 
 help: ## Lista os alvos disponíveis
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}'
@@ -57,11 +59,11 @@ network: ## Cria a rede externa compartilhada portfolio-net (opcional)
 	docker network inspect portfolio-net >/dev/null 2>&1 || docker network create portfolio-net
 
 # ------------------------------------------------------------------ qualidade
-lint: contracts-lint tenant-service-lint performance-service-lint ## Lint de contratos e de todos os serviços
+lint: contracts-lint tenant-service-lint performance-service-lint engagement-service-lint ## Lint de contratos e de todos os serviços
 
-test: tenant-service-test-unit performance-service-test ## Testes unitários de todos os serviços (sem Docker no Go)
+test: tenant-service-test-unit performance-service-test engagement-service-test-unit ## Testes unitários de todos os serviços (sem Docker no Go)
 
-test-integration: tenant-service-test ## Testes com infraestrutura real (Postgres via testcontainers)
+test-integration: tenant-service-test engagement-service-test ## Testes com infraestrutura real (Postgres via testcontainers)
 
 contracts-lint: ## Valida OpenAPI e AsyncAPI com Spectral
 	$(SPECTRAL) lint "contracts/openapi/*.yaml" "contracts/asyncapi/*.yaml" --fail-severity=warn
@@ -86,8 +88,49 @@ tenant-service-up: ## Sobe o núcleo e o tenant-service (migração inclusa)
 performance-service-lint: ## ktlint (via Docker, imagem gradle:jdk21)
 	$(GRADLE) ktlintCheck
 
-performance-service-test: ## Testes JUnit do núcleo de domínio (via Docker)
+performance-service-test: ## Testes JUnit sem Docker aninhado: domínio e contrato (via Docker)
 	$(GRADLE) test
 
-performance-service-build: ## Compila e empacota o núcleo (via Docker)
+performance-service-build: ## Compila e empacota o serviço (via Docker)
 	$(GRADLE) build
+
+performance-service-up: ## Sobe o núcleo e o performance-service (migração Flyway na subida)
+	$(COMPOSE) $(PROFILES_CORE) --profile performance-service up -d --build --wait
+
+# -------------------------------------------------------- recruitment-service
+.PHONY: recruitment-service-lint recruitment-service-test recruitment-service-up
+recruitment-service-lint: ## Pint (exige PHP 8.3+ e composer install no serviço)
+	$(MAKE) -C services/recruitment-service lint
+
+recruitment-service-test: ## Testes unitários e de API do recruitment-service (SQLite; a suíte Integration roda no CI)
+	$(MAKE) -C services/recruitment-service test-unit
+
+recruitment-service-up: ## Sobe o núcleo e o recruitment-service (migração e relay inclusos)
+	$(COMPOSE) $(PROFILES_CORE) --profile recruitment-service up -d --build --wait
+
+# ------------------------------------------------------ engagement-service
+engagement-service-lint: ## eslint + tsc
+	$(MAKE) -C services/engagement-service lint
+
+engagement-service-test: ## Todos os testes, inclusive integração com Postgres (precisa de Docker)
+	$(MAKE) -C services/engagement-service test
+
+engagement-service-test-unit: ## Testes sem Docker
+	$(MAKE) -C services/engagement-service test-unit
+
+engagement-service-build: ## Compila o TypeScript
+	$(MAKE) -C services/engagement-service build
+
+engagement-service-up: ## Sobe o núcleo e o engagement-service (migração inclusa)
+	$(COMPOSE) $(PROFILES_CORE) --profile engagement-service up -d --build --wait
+
+# --------------------------------------------------- analytics-ai-service
+.PHONY: analytics-ai-service-lint analytics-ai-service-test analytics-ai-service-up
+analytics-ai-service-lint: ## ruff + mypy (precisa de make venv no serviço)
+	$(MAKE) -C services/analytics-ai-service lint
+
+analytics-ai-service-test: ## Testes unitários (LLM falso, sem rede)
+	$(MAKE) -C services/analytics-ai-service test
+
+analytics-ai-service-up: ## Sobe o núcleo e o analytics-ai-service
+	$(COMPOSE) $(PROFILES_CORE) --profile analytics-ai-service up -d --build --wait

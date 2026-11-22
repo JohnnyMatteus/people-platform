@@ -169,6 +169,16 @@ describe('clima anônimo: provas de anonimato', () => {
     await expect(survey.answer(employee(9, 'vendas'), s.id, { q1: 4 })).rejects.toMatchObject({ code: 'conflict' });
   });
 
+  it('a listagem traz as pesquisas do tenant com a participação de quem chama', async () => {
+    const { survey } = setup();
+    const s = await open(survey, 3);
+    await survey.answer(principal(BRUNO, TENANT_A, [], 'obras'), s.id, { q1: 4 });
+    const mine = await survey.list(principal(BRUNO, TENANT_A, [], 'obras'));
+    const other = await survey.list(principal(CARLA, TENANT_A, [], 'obras'));
+    expect(mine.map((x) => [x.id, x.alreadyAnswered])).toEqual([[s.id, true]]);
+    expect(other.map((x) => x.alreadyAnswered)).toEqual([false]);
+  });
+
   it('só tenant-admin cria e encerra; k abaixo de 3 é recusado', async () => {
     const { survey } = setup();
     await expect(survey.create(principal(BRUNO), { title: 't', questions: [{ id: 'q', text: 't' }], segments: ['a'] })).rejects.toMatchObject({ code: 'forbidden' });
@@ -189,5 +199,6 @@ describe('isolamento entre tenants na aplicação', () => {
     await expect(oneOnOne.context(outsider([]), m.id)).rejects.toMatchObject({ code: 'not_found' });
     await expect(social.confirmRead(outsider([]), post.id)).rejects.toMatchObject({ code: 'not_found' });
     expect(await social.feed(outsider([]))).toEqual([]);
+    expect(await survey.list(outsider([]))).toEqual([]);
   });
 });

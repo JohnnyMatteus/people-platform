@@ -55,6 +55,7 @@ export class MemoryStore implements Store {
       surveys: {
         insert: async (x) => void s.surveys.push(x),
         get: async (id) => mine(s.surveys).find((x) => x.id === id) ?? null,
+        list: async (limit) => mine(s.surveys).slice().reverse().slice(0, limit),
         save: async (x) => void (s.surveys = s.surveys.map((y) => (y.id === x.id && y.tenantId === t ? x : y))),
         addParticipation: async (surveyId, employeeId, on) => {
           if (mine(s.participation).some((p) => p.surveyId === surveyId && p.employeeId === employeeId)) return false;

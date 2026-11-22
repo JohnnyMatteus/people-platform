@@ -2553,6 +2553,38 @@
           "operation_debug": false
         }
       }
+    },
+    {
+      "endpoint": "/engagement/v1/surveys",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://engagement-service:8080"
+          ],
+          "url_pattern": "/v1/surveys",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
     }
   ]
 }

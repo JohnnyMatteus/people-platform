@@ -32,6 +32,11 @@ export class PostgresSurveys implements SurveyRepository {
     return rows[0] ? survey(rows[0]) : null;
   }
 
+  async list(limit: number) {
+    const { rows } = await this.c.query('SELECT * FROM surveys ORDER BY created_at DESC, id LIMIT $1', [limit]);
+    return rows.map(survey);
+  }
+
   async save(s: Survey) {
     await this.c.query('UPDATE surveys SET status = $2 WHERE id = $1', [s.id, s.status]);
   }

@@ -215,6 +215,19 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
   /v1/surveys:
+    get:
+      tags: [surveys]
+      operationId: listSurveys
+      summary: Pesquisas do tenant, mais recentes primeiro, com a participação de quem chama.
+      responses:
+        "200":
+          description: Pesquisas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Survey"
     post:
       tags: [surveys]
       operationId: createSurvey

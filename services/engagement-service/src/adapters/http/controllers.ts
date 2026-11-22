@@ -153,6 +153,11 @@ export class SurveyController {
     return surveyOut(await this.s.create(me, { ...b, minGroupSize: b.min_group_size }));
   }
 
+  @Get()
+  async list(@Me() me: Principal) {
+    return (await this.s.list(me)).map(({ alreadyAnswered, ...s }) => surveyOut(s, alreadyAnswered));
+  }
+
   @Get(':surveyId')
   async get(@Me() me: Principal, @Param('surveyId', ParseUUIDPipe) id: string) {
     const { alreadyAnswered, ...s } = await this.s.get(me, id);

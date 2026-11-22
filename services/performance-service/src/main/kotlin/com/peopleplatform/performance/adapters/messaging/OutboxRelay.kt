@@ -56,7 +56,7 @@ class OutboxRelay(
                 try {
                     val message = MessageBuilder.withPayload(event.payload)
                         .setHeader(KafkaHeaders.TOPIC, topic)
-                        .setHeader(KafkaHeaders.KEY, event.aggregateId.toString())
+                        .setHeader(KafkaHeaders.KEY, event.tenantId.toString())
                         .setHeader("event_type", event.eventType)
                         .build()
                     kafka.send(message).get(5, TimeUnit.SECONDS)

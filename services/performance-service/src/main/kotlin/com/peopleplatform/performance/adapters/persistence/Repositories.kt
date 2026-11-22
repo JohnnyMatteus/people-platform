@@ -60,8 +60,17 @@ interface PdiActionRepository : JpaRepository<PdiActionEntity, UUID> {
 
 interface OutboxRepository : JpaRepository<OutboxEntity, UUID> {
     @Query(
-        "select * from outbox where published_at is null order by occurred_at, id limit :n for update skip locked",
+        """
+        select * from outbox
+        where published_at is null and tenant_id not in (:blocked)
+        order by occurred_at, id
+        limit :n
+        for update skip locked
+        """,
         nativeQuery = true,
     )
-    fun lockPending(@Param("n") n: Int): List<OutboxEntity>
+    fun lockPending(
+        @Param("n") n: Int,
+        @Param("blocked") blocked: Collection<UUID>,
+    ): List<OutboxEntity>
 }

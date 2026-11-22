@@ -34,6 +34,14 @@ export class SurveyService {
     });
   }
 
+  /** As pesquisas do tenant, mais recentes primeiro, com a participação do chamador. */
+  list(p: Principal): Promise<(Survey & { alreadyAnswered: boolean })[]> {
+    return this.d.store.inTenant(p.tenantId, async (tx) => {
+      const surveys = await tx.surveys.list(50);
+      return Promise.all(surveys.map(async (s) => ({ ...s, alreadyAnswered: await tx.surveys.hasParticipated(s.id, p.employeeId) })));
+    });
+  }
+
   get(p: Principal, id: string): Promise<Survey & { alreadyAnswered: boolean }> {
     return this.d.store.inTenant(p.tenantId, async (tx) => ({
       ...(await this.load(tx, id)),

@@ -27,6 +27,8 @@ export interface OneOnOneRepository {
 export interface SurveyRepository {
   insert(s: Survey): Promise<void>;
   get(id: string): Promise<Survey | null>;
+  /** Mais recentes primeiro. */
+  list(limit: number): Promise<Survey[]>;
   save(s: Survey): Promise<void>;
   /** false se o colaborador já participou. Só guarda quem participou, nunca o que respondeu. */
   addParticipation(surveyId: string, employeeId: string, on: string): Promise<boolean>;

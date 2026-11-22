@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
 
 permissions:
@@ -26,6 +26,7 @@ jobs:
       recruitment-service: ${{ steps.filter.outputs.recruitment-service }}
       analytics-ai-service: ${{ steps.filter.outputs.analytics-ai-service }}
       platform: ${{ steps.filter.outputs.platform }}
+      web: ${{ steps.filter.outputs.web }}
       engagement-service: ${{ steps.filter.outputs.engagement-service }}
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +44,8 @@ jobs:
               - '.github/workflows/ci.yml'
             performance-service:
               - 'services/performance-service/**'
+              - 'contracts/openapi/performance-service.yaml'
+              - 'contracts/asyncapi/schemas/**'
               - '.github/workflows/ci.yml'
             recruitment-service:
               - 'services/recruitment-service/**'
@@ -55,6 +58,9 @@ jobs:
             analytics-ai-service:
               - 'services/analytics-ai-service/**'
               - 'contracts/asyncapi/schemas/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'web/**'
               - '.github/workflows/ci.yml'
             platform:
               - 'docker-compose*.yml'
@@ -104,16 +110,26 @@ jobs:
     needs: changes
     if: needs.changes.outputs.performance-service == 'true'
     runs-on: ubuntu-latest
-    # Mesma imagem usada localmente (Java e Gradle não são pré-requisitos da máquina).
-    container:
-      image: gradle:8.14.3-jdk21
     defaults:
       run:
         working-directory: services/performance-service
     steps:
       - uses: actions/checkout@v4
-      - name: Lint, testes e build (ktlint + JUnit)
-        run: gradle --no-daemon --console=plain ktlintCheck test build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Lint (ktlint)
+        run: gradle --no-daemon --console=plain ktlintCheck
+      - name: Testes unitários, de contrato e build
+        run: gradle --no-daemon --console=plain test build
+      - name: Testes de integração (Postgres real via testcontainers, RLS e outbox)
+        run: gradle --no-daemon --console=plain integrationTest
+      - name: Imagem Docker
+        run: docker build -t people-platform/performance-service:ci .
 
   recruitment-service:
     needs: changes
@@ -216,6 +232,28 @@ jobs:
       - name: Imagem Docker
         run: docker build -t people-platform/analytics-ai-service:ci .
 
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Testes (vitest)
+        run: npm test
+      - name: Typecheck e build
+        run: npm run build
+
   platform:
     needs: changes
     if: needs.changes.outputs.platform == 'true'
@@ -223,7 +261,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: docker compose config (todos os perfis)
-        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile analytics-ai-service config -q
+        run: docker compose --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service config -q
       - name: KrakenD valida a configuração do gateway
         run: docker run --rm -v "$PWD/infra/gateway:/etc/krakend:ro" krakend:2.13.11 check -tlc /etc/krakend/krakend.json
       - name: Realm do Keycloak é JSON válido
@@ -234,7 +272,7 @@ jobs:
   # Agregador: um único check obrigatório. Jobs pulados pelo filtro de caminhos contam como sucesso.
   ci-ok:
     name: CI ok
-    needs: [changes, contracts, tenant-service, performance-service, recruitment-service, engagement-service, analytics-ai-service, platform]
+    needs: [changes, contracts, tenant-service, performance-service, recruitment-service, engagement-service, analytics-ai-service, web, platform]
     if: always()
     runs-on: ubuntu-latest
     steps:

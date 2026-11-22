@@ -58,6 +58,18 @@ interface PdiActionRepository : JpaRepository<PdiActionEntity, UUID> {
     fun findByEmployeeIdOrderByDueOnAsc(employeeId: UUID): List<PdiActionEntity>
 }
 
+interface ObjectiveRepository : JpaRepository<ObjectiveEntity, UUID> {
+    fun findAllByOrderByCreatedAtAsc(): List<ObjectiveEntity>
+}
+
+interface KeyResultRepository : JpaRepository<KeyResultEntity, UUID> {
+    fun findByObjectiveIdIn(objectiveIds: Collection<UUID>): List<KeyResultEntity>
+}
+
+interface CheckInRepository : JpaRepository<CheckInEntity, UUID> {
+    fun findByKeyResultIdOrderByCreatedAtAsc(keyResultId: UUID): List<CheckInEntity>
+}
+
 interface OutboxRepository : JpaRepository<OutboxEntity, UUID> {
     @Query(
         """

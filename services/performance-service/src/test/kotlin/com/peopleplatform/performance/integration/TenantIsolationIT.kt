@@ -42,6 +42,9 @@ class TenantIsolationIT : IntegrationTestBase() {
         "critical_positions",
         "successors",
         "pdi_actions",
+        "objectives",
+        "key_results",
+        "check_ins",
         "outbox",
     )
 
@@ -94,6 +97,17 @@ class TenantIsolationIT : IntegrationTestBase() {
                 "due_on" to java.time.LocalDate.now().plusMonths(2).toString(),
             ),
         )
+        val objective = api.post(
+            "/v1/objectives",
+            a.manager,
+            mapOf(
+                "level" to "TEAM",
+                "title" to "Reduzir retrabalho na obra",
+                "key_results" to listOf(mapOf("title" to "Taxa de retrabalho", "start" to "20", "target" to "10")),
+            ),
+        )
+        val keyResult = objective.get("key_results").get(0).get("id").asText()
+        api.post("/v1/key-results/$keyResult/check-ins", a.manager, mapOf("value" to "15"))
         api.put(
             "/v1/nine-box/policy",
             a.admin,
@@ -123,6 +137,10 @@ class TenantIsolationIT : IntegrationTestBase() {
         api.get("/v1/cycles/${a.cycleId}/calibration-sessions/current", other.manager, expect = 404)
         api.get("/v1/employees/${a.staff[0].id}/nine-box-history", other.manager, expect = 404)
         api.get("/v1/employees/${a.staff[0].id}/pdi", other.manager).let { assertEquals(0, it.get("actions").size()) }
+        assertEquals(0, api.get("/v1/objectives", other.manager).size())
+        api.get("/v1/objectives/${objective.get("id").asText()}", other.manager, expect = 404)
+        api.post("/v1/objectives/${objective.get("id").asText()}/close", other.admin, expect = 404)
+        api.post("/v1/key-results/$keyResult/check-ins", other.manager, mapOf("value" to "12"), expect = 404)
     }
 
     @Test

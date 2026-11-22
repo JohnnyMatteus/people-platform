@@ -3039,6 +3039,169 @@
           "operation_debug": false
         }
       }
+    },
+    {
+      "endpoint": "/performance/v1/objectives",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://performance-service:8080"
+          ],
+          "url_pattern": "/v1/objectives",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      },
+      "input_query_strings": [
+        "*"
+      ]
+    },
+    {
+      "endpoint": "/performance/v1/objectives",
+      "method": "POST",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://performance-service:8080"
+          ],
+          "url_pattern": "/v1/objectives",
+          "encoding": "no-op",
+          "method": "POST"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/performance/v1/objectives/{objectiveId}",
+      "method": "GET",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://performance-service:8080"
+          ],
+          "url_pattern": "/v1/objectives/{objectiveId}",
+          "encoding": "no-op",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/performance/v1/objectives/{objectiveId}/close",
+      "method": "POST",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://performance-service:8080"
+          ],
+          "url_pattern": "/v1/objectives/{objectiveId}/close",
+          "encoding": "no-op",
+          "method": "POST"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
+    },
+    {
+      "endpoint": "/performance/v1/key-results/{keyResultId}/check-ins",
+      "method": "POST",
+      "output_encoding": "no-op",
+      "input_headers": [
+        "Authorization",
+        "Content-Type"
+      ],
+      "backend": [
+        {
+          "host": [
+            "http://performance-service:8080"
+          ],
+          "url_pattern": "/v1/key-results/{keyResultId}/check-ins",
+          "encoding": "no-op",
+          "method": "POST"
+        }
+      ],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://keycloak:8080/realms/people/protocol/openid-connect/certs",
+          "issuer": "http://localhost:8180/realms/people",
+          "audience": [
+            "people-api"
+          ],
+          "cache": true,
+          "disable_jwk_security": true,
+          "operation_debug": false
+        }
+      }
     }
   ]
 }

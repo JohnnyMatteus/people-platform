@@ -3,6 +3,8 @@ package com.peopleplatform.performance.adapters.persistence
 import com.peopleplatform.performance.domain.ninebox.AxisThresholds
 import com.peopleplatform.performance.domain.ninebox.NineBoxPolicy
 import com.peopleplatform.performance.domain.ninebox.Scale
+import com.peopleplatform.performance.domain.okr.ObjectiveLevel
+import com.peopleplatform.performance.domain.okr.ObjectiveStatus
 import com.peopleplatform.performance.domain.pdi.PdiActionKind
 import com.peopleplatform.performance.domain.pdi.PdiActionStatus
 import com.peopleplatform.performance.domain.shared.TenantId
@@ -223,4 +225,42 @@ class OutboxEntity(
     var publishedAt: Instant?,
     var attempts: Int,
     var lastError: String?,
+)
+
+@Entity
+@Table(name = "objectives")
+class ObjectiveEntity(
+    @Id var id: UUID,
+    var tenantId: UUID,
+    @Enumerated(EnumType.STRING) var level: ObjectiveLevel,
+    var ownerId: UUID?,
+    var parentId: UUID?,
+    var title: String,
+    @Enumerated(EnumType.STRING) var status: ObjectiveStatus,
+    var createdBy: UUID,
+    var createdAt: Instant,
+)
+
+@Entity
+@Table(name = "key_results")
+class KeyResultEntity(
+    @Id var id: UUID,
+    var tenantId: UUID,
+    var objectiveId: UUID,
+    var title: String,
+    var startValue: BigDecimal,
+    var targetValue: BigDecimal,
+    var currentValue: BigDecimal,
+)
+
+@Entity
+@Table(name = "check_ins")
+class CheckInEntity(
+    @Id var id: UUID,
+    var tenantId: UUID,
+    var keyResultId: UUID,
+    var newValue: BigDecimal,
+    var comment: String?,
+    var createdBy: UUID,
+    var createdAt: Instant,
 )

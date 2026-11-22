@@ -5,6 +5,7 @@
 #   tenant-service  o serviço Go e o job de migração dele
 #   recruitment-service  o ATS (PHP + Laravel), o job de migração e o relay da outbox
 #   engagement-service  o serviço NestJS e o job de migração dele
+#   analytics-ai-service  o serviço Python de analytics e IA
 # Uso: make up (core), make up-all (core + observability + tools + serviços). Senhas são só de dev.
 name: people-platform
 
@@ -292,6 +293,31 @@ services:
         condition: service_completed_successfully
     environment: *recruitment-env
     restart: unless-stopped
+  # ---------------------------------------------------- analytics-ai-service
+  analytics-ai-service:
+    build:
+      context: ./services/analytics-ai-service
+    image: people-platform/analytics-ai-service:dev
+    profiles: [analytics-ai-service]
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      HTTP_PORT: "8000"
+      KAFKA_BROKERS: kafka:9092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-dev-only-change-me}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    ports:
+      - "${ANALYTICS_AI_SERVICE_PORT:-8082}:8000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz')"]
     networks: [people-platform-net]
 
   # -------------------------------------------------------- observability

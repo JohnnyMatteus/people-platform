@@ -11,7 +11,9 @@ import kotlin.test.assertEquals
 /** Toda operação do OpenAPI tem handler, e todo handler de /v1 está no OpenAPI. */
 class ContractConformanceIT : IntegrationTestBase() {
     // O actuator registra um segundo RequestMappingHandlerMapping (controllerEndpointHandlerMapping).
-    @Autowired @Qualifier("requestMappingHandlerMapping") lateinit var mappings: RequestMappingHandlerMapping
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    lateinit var mappings: RequestMappingHandlerMapping
 
     private fun implemented(): Set<String> = mappings.handlerMethods.keys.flatMap { info: RequestMappingInfo ->
         val patterns = info.pathPatternsCondition?.patternValues ?: emptySet()

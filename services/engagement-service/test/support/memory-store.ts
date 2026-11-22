@@ -112,6 +112,31 @@ export class MemoryStore implements Store {
         get: async () => mine(s.settings)[0] ?? null,
         upsert: async (x) => void (s.settings = [...s.settings.filter((y) => y.tenantId !== t), x]),
       },
+      privacy: {
+        eraseSubject: async (id) => {
+          const before = [s.feedbacks, s.praises, s.meetings, s.participation, s.ledger, s.badges, s.posts, s.receipts].reduce(
+            (n, rows) => n + mine(rows as { tenantId: string }[]).length,
+            0,
+          );
+          const keep = <R extends { tenantId: string }>(rows: R[], drop: (r: R) => boolean) => rows.filter((r) => r.tenantId !== t || !drop(r));
+          const authored = new Set(mine(s.posts).filter((p) => p.authorId === id).map((p) => p.id));
+          s.feedbacks = keep(s.feedbacks, (f) => f.fromId === id || f.toId === id);
+          s.meetings = keep(s.meetings, (m) => m.leaderId === id || m.participantId === id);
+          s.praises = keep(s.praises, (p) => p.fromId === id || (p.toIds.length === 1 && p.toIds[0] === id)).map((p) =>
+            p.tenantId === t ? { ...p, toIds: p.toIds.filter((x) => x !== id) } : p,
+          );
+          s.participation = keep(s.participation, (p) => p.employeeId === id);
+          s.ledger = keep(s.ledger, (l) => l.employeeId === id);
+          s.badges = keep(s.badges, (b) => b.employeeId === id);
+          s.receipts = keep(s.receipts, (r) => r.employeeId === id || authored.has(r.postId));
+          s.posts = keep(s.posts, (p) => p.authorId === id);
+          const after = [s.feedbacks, s.praises, s.meetings, s.participation, s.ledger, s.badges, s.posts, s.receipts].reduce(
+            (n, rows) => n + mine(rows as { tenantId: string }[]).length,
+            0,
+          );
+          return before - after;
+        },
+      },
       processedEvents: {
         claim: async (eventId) => {
           if (mine(s.processed).some((p) => p.eventId === eventId)) return false;

@@ -74,6 +74,11 @@ export interface OutboxRepository {
   add(e: OutboxEvent): Promise<void>;
 }
 
+export interface PrivacyRepository {
+  /** Apaga ou anonimiza tudo que aponta para a pessoa neste tenant. Devolve quantas linhas mudaram. */
+  eraseSubject(subjectId: string): Promise<number>;
+}
+
 /** Repositórios ligados a uma transação com o escopo de um tenant. */
 export interface Tx {
   feedbacks: FeedbackRepository;
@@ -85,6 +90,7 @@ export interface Tx {
   outbox: OutboxRepository;
   settings: TenantSettingsRepository;
   processedEvents: ProcessedEventRepository;
+  privacy: PrivacyRepository;
 }
 
 export interface Store {

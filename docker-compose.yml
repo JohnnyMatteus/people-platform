@@ -334,6 +334,38 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz')"]
     networks: [people-platform-net]
 
+  # ------------------------------------------------- performance-service (perfil performance-service)
+  # As migrações Flyway rodam na subida, com o dono do esquema; a aplicação usa o papel sem BYPASSRLS.
+  performance-service:
+    build:
+      context: ./services/performance-service
+    image: people-platform/performance-service:dev
+    profiles: [performance-service]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/performance_service
+      DATABASE_USER: performance_service_app
+      DATABASE_PASSWORD: ${PERFORMANCE_DB_APP_PASSWORD:-dev-only-change-me}
+      DATABASE_MIGRATION_URL: jdbc:postgresql://postgres:5432/performance_service
+      DATABASE_MIGRATION_USER: performance_service_owner
+      DATABASE_MIGRATION_PASSWORD: ${PERFORMANCE_DB_OWNER_PASSWORD:-dev-only-change-me}
+      KAFKA_BROKERS: kafka:9092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+    ports:
+      - "${PERFORMANCE_SERVICE_PORT:-8085}:8080"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/actuator/health/readiness"]
+    networks: [people-platform-net]
+
   # -------------------------------------------------------- observability
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.130.0

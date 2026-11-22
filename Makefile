@@ -10,7 +10,7 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile analytics-ai-service
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
 # Monta a raiz do repositório: os testes do serviço leem contracts/ (../../contracts).
@@ -22,7 +22,7 @@ SPECTRAL       := npx -y @stoplight/spectral-cli@6.15.0
 .PHONY: help up up-all down logs ps seed smoke test test-integration lint clean network \
         contracts-lint \
         tenant-service-lint tenant-service-test tenant-service-test-unit tenant-service-build tenant-service-up \
-        performance-service-lint performance-service-test performance-service-build \
+        performance-service-lint performance-service-test performance-service-build performance-service-up \
         engagement-service-lint engagement-service-test engagement-service-test-unit engagement-service-build engagement-service-up
 
 help: ## Lista os alvos disponíveis
@@ -88,11 +88,14 @@ tenant-service-up: ## Sobe o núcleo e o tenant-service (migração inclusa)
 performance-service-lint: ## ktlint (via Docker, imagem gradle:jdk21)
 	$(GRADLE) ktlintCheck
 
-performance-service-test: ## Testes JUnit do núcleo de domínio (via Docker)
+performance-service-test: ## Testes JUnit sem Docker aninhado: domínio e contrato (via Docker)
 	$(GRADLE) test
 
-performance-service-build: ## Compila e empacota o núcleo (via Docker)
+performance-service-build: ## Compila e empacota o serviço (via Docker)
 	$(GRADLE) build
+
+performance-service-up: ## Sobe o núcleo e o performance-service (migração Flyway na subida)
+	$(COMPOSE) $(PROFILES_CORE) --profile performance-service up -d --build --wait
 
 # -------------------------------------------------------- recruitment-service
 .PHONY: recruitment-service-lint recruitment-service-test recruitment-service-up

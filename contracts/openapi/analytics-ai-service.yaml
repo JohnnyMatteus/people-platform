@@ -4,8 +4,7 @@ info:
   version: 0.0.1
   summary: People analytics agregado e recursos de IA com saída validada por schema.
   description: |
-    Esboço de contrato. O serviço será construído numa próxima rodada; este arquivo fixa os
-    recursos principais e as convenções (bearer JWT com tenant_id, problem+json, paginação por cursor).
+    Contrato do serviço implementado; os recursos de IA ainda descrevem só o essencial da resposta. Convenções (bearer JWT com tenant_id, problem+json, paginação por cursor).
   license:
     name: MIT
     identifier: MIT
@@ -32,7 +31,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [area, unit, tenure_band, age_band]
+            enum: [area, unit, tenure_band, age_band, gender]
         - name: period
           in: query
           required: true
@@ -42,6 +41,33 @@ paths:
       responses:
         "200":
           description: Série agregada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TurnoverReport"
+        "422":
+          description: Período inválido (invalid_period).
+  /v1/analytics/nine-box:
+    get:
+      tags: [analytics]
+      operationId: nineBoxDistribution
+      summary: Distribuição agregada do nine box de um ciclo (quadrantes menores que k suprimidos).
+      parameters:
+        - name: cycle_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Contagem por quadrante, sem identificar pessoas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NineBoxDistribution"
+        "404":
+          description: Ciclo sem dados (not_found).
   /v1/ai/feedback-drafts:
     post:
       tags: [analytics]
@@ -62,6 +88,16 @@ paths:
           description: Sugestões estruturadas.
         "422":
           description: Saída da IA inválida após nova tentativa.
+  /v1/ai/one-on-one-briefs:
+    post:
+      tags: [analytics]
+      operationId: briefOneOnOne
+      summary: Pauta sugerida para uma 1:1 a partir de itens, feedbacks e elogios recentes.
+      responses:
+        "200":
+          description: Pauta (sugestão; nunca aplicada sem confirmação).
+        "422":
+          description: Saída da IA inválida após nova tentativa.
   /v1/ai/climate-action-plans:
     post:
       tags: [analytics]
@@ -78,3 +114,64 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    Indicators:
+      type: object
+      required: [group, headcount_start, headcount_end, hires, terminations, turnover_rate, avg_tenure_months]
+      properties:
+        group:
+          type: string
+        headcount_start:
+          type: integer
+        headcount_end:
+          type: integer
+        hires:
+          type: integer
+        terminations:
+          type: integer
+        turnover_rate:
+          type: number
+        avg_tenure_months:
+          type: number
+    TurnoverReport:
+      type: object
+      required: [period, group_by, min_group_size, groups, suppressed_groups, total]
+      properties:
+        period:
+          type: string
+        group_by:
+          type: string
+          enum: [area, unit, tenure_band, age_band, gender]
+        min_group_size:
+          type: integer
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Indicators"
+        suppressed_groups:
+          type: integer
+        total:
+          oneOf:
+            - $ref: "#/components/schemas/Indicators"
+            - type: "null"
+    NineBoxDistribution:
+      type: object
+      required: [cycle_id, min_group_size, quadrants, suppressed_quadrants]
+      properties:
+        cycle_id:
+          type: string
+          format: uuid
+        min_group_size:
+          type: integer
+        quadrants:
+          type: array
+          items:
+            type: object
+            required: [quadrant, count]
+            properties:
+              quadrant:
+                type: string
+              count:
+                type: integer
+        suppressed_quadrants:
+          type: integer

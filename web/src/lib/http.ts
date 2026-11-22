@@ -26,7 +26,7 @@ const client = ofetch.create({
   },
 })
 
-type Method = 'GET' | 'POST' | 'PUT' | 'PATCH'
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 /** Toda resposta é validada com o schema zod do contrato antes de chegar à tela. */
 export async function api<T>(schema: ZodType<T>, method: Method, path: string, body?: unknown): Promise<T> {
@@ -46,6 +46,7 @@ export const get = <T>(schema: ZodType<T>, path: string) => api(schema, 'GET', p
 export const post = <T>(schema: ZodType<T>, path: string, body?: unknown) => api(schema, 'POST', path, body)
 export const put = <T>(schema: ZodType<T>, path: string, body?: unknown) => api(schema, 'PUT', path, body)
 export const patch = <T>(schema: ZodType<T>, path: string, body?: unknown) => api(schema, 'PATCH', path, body)
+export const del = <T>(schema: ZodType<T>, path: string) => api(schema, 'DELETE', path)
 
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message

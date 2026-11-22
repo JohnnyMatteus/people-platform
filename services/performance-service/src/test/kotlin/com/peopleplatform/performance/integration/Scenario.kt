@@ -16,7 +16,12 @@ import java.util.UUID
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt as jwtPost
 
 /** Uma pessoa de um tenant, com o token que o Keycloak emitiria para ela. */
-class Person(val tenant: UUID, val roles: Set<String>, val id: UUID = UUID.randomUUID(), val name: String = "Pessoa Exemplo")
+class Person(
+    val tenant: UUID,
+    val roles: Set<String>,
+    val id: UUID = UUID.randomUUID(),
+    val name: String = "Pessoa Exemplo",
+)
 
 class Api(private val mvc: MockMvc, private val json: ObjectMapper) {
     fun <B : MockHttpServletRequestBuilder> B.asPerson(p: Person?): B {
@@ -63,7 +68,10 @@ class Scenario(private val api: Api, val tenant: UUID) {
     lateinit var sessionId: String
 
     private fun competencies(self: Int, manager: Int) =
-        listOf(mapOf("competency" to "Comunicação", "score" to self), mapOf("competency" to "Entrega", "score" to manager))
+        listOf(
+            mapOf("competency" to "Comunicação", "score" to self),
+            mapOf("competency" to "Entrega", "score" to manager),
+        )
 
     fun runUntilCalibrationOpen() {
         cycleId = api.post("/v1/cycles", admin, mapOf("name" to "Ciclo 2026", "type" to "360")).get("id").asText()
@@ -71,7 +79,12 @@ class Scenario(private val api: Api, val tenant: UUID) {
         staff.forEach {
             api.post(
                 "/v1/employees", manager,
-                mapOf("id" to it.id, "name" to it.name, "job_title" to "Analista", "role_since" to LocalDate.now().minusYears(2).toString()),
+                mapOf(
+                    "id" to it.id,
+                    "name" to it.name,
+                    "job_title" to "Analista",
+                    "role_since" to LocalDate.now().minusYears(2).toString(),
+                ),
                 expect = 200,
             )
         }

@@ -102,7 +102,9 @@ class CalibrationService(
     }
 
     fun getByCycle(caller: Caller, cycleId: UUID): SessionView = scope.run(caller.tenantId) {
-        view(caller, sessions.findByCycleId(cycleId) ?: throw NotFoundException("ciclo ainda não tem sessão de calibração"))
+        val session = sessions.findByCycleId(cycleId)
+            ?: throw NotFoundException("ciclo ainda não tem sessão de calibração")
+        view(caller, session)
     }
 
     fun adjust(caller: Caller, id: UUID, employee: UUID, to: Quadrant, justification: String): CalibrationAdjustment =
@@ -124,7 +126,14 @@ class CalibrationService(
         val outcome = rebuild(caller, entity).close(clock.instant())
         outcome.events().forEach { e ->
             history.save(
-                HistoryEntity(e.employeeId.value, e.cycleId.value, caller.tenantId.value, e.quadrant.name, e.calibrated, e.occurredAt),
+                HistoryEntity(
+                    e.employeeId.value,
+                    e.cycleId.value,
+                    caller.tenantId.value,
+                    e.quadrant.name,
+                    e.calibrated,
+                    e.occurredAt,
+                ),
             )
             events.publish(
                 caller.tenantId, "calibration", e.employeeId.value, "NineBoxCalibrado",
@@ -189,11 +198,23 @@ class CalibrationService(
         val domain = CalibrationSession(caller.tenantId, CycleId(entity.cycleId), entity.toDomain(caller.tenantId))
         placements.findBySessionId(entity.id).forEach {
             domain.add(
-                Assessment(caller.tenantId, CycleId(entity.cycleId), EmployeeId(it.employeeId), it.performanceScore, it.potentialScore),
+                Assessment(
+                    caller.tenantId,
+                    CycleId(entity.cycleId),
+                    EmployeeId(it.employeeId),
+                    it.performanceScore,
+                    it.potentialScore,
+                ),
             )
         }
         adjustments.findBySessionIdOrderByAtAscIdAsc(entity.id).forEach {
-            domain.adjust(EmployeeId(it.employeeId), Quadrant.valueOf(it.toQuadrant), EmployeeId(it.calibratedBy), it.justification, it.at)
+            domain.adjust(
+                EmployeeId(it.employeeId),
+                Quadrant.valueOf(it.toQuadrant),
+                EmployeeId(it.calibratedBy),
+                it.justification,
+                it.at,
+            )
         }
         return domain
     }

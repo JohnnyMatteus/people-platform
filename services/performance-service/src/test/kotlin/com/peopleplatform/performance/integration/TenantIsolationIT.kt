@@ -38,9 +38,17 @@ class TenantIsolationIT : IntegrationTestBase() {
     private fun countAs(tenant: UUID?, table: String): Long = jdbc.execute { c: java.sql.Connection ->
         c.autoCommit = false
         if (tenant != null) {
-            c.prepareStatement("select set_config('app.tenant_id', ?, true)").use { it.setString(1, tenant.toString()); it.execute() }
+            c.prepareStatement("select set_config('app.tenant_id', ?, true)").use {
+                it.setString(1, tenant.toString())
+                it.execute()
+            }
         }
-        val n = c.createStatement().use { st -> st.executeQuery("select count(*) from $table").use { rs -> rs.next(); rs.getLong(1) } }
+        val n = c.createStatement().use { st ->
+            st.executeQuery("select count(*) from $table").use { rs ->
+                rs.next()
+                rs.getLong(1)
+            }
+        }
         c.rollback()
         n
     }!!
@@ -52,14 +60,27 @@ class TenantIsolationIT : IntegrationTestBase() {
         val dora = a.staff[2]
         api.post(
             "/v1/calibration-sessions/${a.sessionId}/adjustments", a.manager,
-            mapOf("employee_id" to dora.id, "to" to "Q6", "justification" to "Entregas do segundo semestre não refletidas."),
+            mapOf(
+                "employee_id" to dora.id,
+                "to" to "Q6",
+                "justification" to "Entregas do segundo semestre não refletidas.",
+            ),
         )
         api.post("/v1/calibration-sessions/${a.sessionId}/close", a.manager, expect = 200)
-        val position = api.post("/v1/critical-positions", a.manager, mapOf("title" to "Gerente de Obras")).get("position_id").asText()
-        api.post("/v1/critical-positions/$position/successors", a.manager, mapOf("employee_id" to a.staff[0].id, "readiness" to "READY_NOW"))
+        val position = api.post("/v1/critical-positions", a.manager, mapOf("title" to "Gerente de Obras"))
+            .get("position_id").asText()
+        api.post(
+            "/v1/critical-positions/$position/successors",
+            a.manager,
+            mapOf("employee_id" to a.staff[0].id, "readiness" to "READY_NOW"),
+        )
         api.post(
             "/v1/employees/${a.staff[0].id}/pdi/actions", a.manager,
-            mapOf("title" to "Mentoria", "kind" to "MENTORING", "due_on" to java.time.LocalDate.now().plusMonths(2).toString()),
+            mapOf(
+                "title" to "Mentoria",
+                "kind" to "MENTORING",
+                "due_on" to java.time.LocalDate.now().plusMonths(2).toString(),
+            ),
         )
         api.put(
             "/v1/nine-box/policy", a.admin,
@@ -95,11 +116,20 @@ class TenantIsolationIT : IntegrationTestBase() {
         val mine = TenantId(UUID.randomUUID())
         val foreign = UUID.randomUUID()
         assertFailsWith<DataAccessException> {
-            scope.run(mine) { cycles.saveAndFlush(CycleEntity(UUID.randomUUID(), foreign, "Ciclo alheio", "self", "draft", Instant.now())) }
+            scope.run(mine) {
+                cycles.saveAndFlush(
+                    CycleEntity(UUID.randomUUID(), foreign, "Ciclo alheio", "self", "draft", Instant.now()),
+                )
+            }
         }
         assertFailsWith<DataAccessException> {
             // Sem escopo nenhum, a escrita também falha (falha fechada).
-            jdbc.update("insert into cycles (id, tenant_id, name, type, status, created_at) values (?, ?, 'x', 'self', 'draft', now())", UUID.randomUUID(), foreign)
+            jdbc.update(
+                "insert into cycles (id, tenant_id, name, type, status, created_at) " +
+                    "values (?, ?, 'x', 'self', 'draft', now())",
+                UUID.randomUUID(),
+                foreign,
+            )
         }
     }
 }

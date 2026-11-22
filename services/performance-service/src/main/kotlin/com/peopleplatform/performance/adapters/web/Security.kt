@@ -35,7 +35,9 @@ class TenantClaimValidator : OAuth2TokenValidator<Jwt> {
         return if (ok) {
             OAuth2TokenValidatorResult.success()
         } else {
-            OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "claims tenant_id e sub devem ser UUID", null))
+            OAuth2TokenValidatorResult.failure(
+                OAuth2Error("invalid_token", "claims tenant_id e sub devem ser UUID", null),
+            )
         }
     }
 

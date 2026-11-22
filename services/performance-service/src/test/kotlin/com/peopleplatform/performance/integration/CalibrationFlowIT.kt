@@ -23,8 +23,12 @@ class CalibrationFlowIT : IntegrationTestBase() {
 
     private fun outboxOf(tenant: UUID, type: String): List<String> = jdbc.execute { c: java.sql.Connection ->
         c.autoCommit = false
-        c.prepareStatement("select set_config('app.tenant_id', ?, true)").use { it.setString(1, tenant.toString()); it.execute() }
-        val rows = c.prepareStatement("select payload::text from outbox where event_type = ? order by occurred_at, id").use {
+        c.prepareStatement("select set_config('app.tenant_id', ?, true)").use {
+            it.setString(1, tenant.toString())
+            it.execute()
+        }
+        val sql = "select payload::text from outbox where event_type = ? order by occurred_at, id"
+        val rows = c.prepareStatement(sql).use {
             it.setString(1, type)
             it.executeQuery().use { rs -> generateSequence { if (rs.next()) rs.getString(1) else null }.toList() }
         }
@@ -41,7 +45,9 @@ class CalibrationFlowIT : IntegrationTestBase() {
         val dora = s.staff[2]
         val session = api.get("/v1/calibration-sessions/${s.sessionId}", s.manager)
         assertEquals("open", session.get("status").asText())
-        val placements = session.get("placements").associate { it.get("employee_id").asText() to it.get("original").asText() }
+        val placements = session.get("placements").associate {
+            it.get("employee_id").asText() to it.get("original").asText()
+        }
         assertEquals("Q9", placements[bia.id.toString()])
         assertEquals("Q5", placements[s.staff[1].id.toString()])
         assertEquals("Q3", placements[dora.id.toString()])
@@ -84,8 +90,12 @@ class CalibrationFlowIT : IntegrationTestBase() {
         val events = outboxOf(s.tenant, "NineBoxCalibrado")
         assertEquals(3, events.size)
         events.forEach { ContractSchemas.assertValid("nine-box-calibrado.v1.json", it) }
-        outboxOf(s.tenant, "AvaliacaoConcluida").forEach { ContractSchemas.assertValid("avaliacao-concluida.v1.json", it) }
-        val doraEvent = events.map(json::readTree).first { it.get("data").get("employee_id").asText() == dora.id.toString() }
+        outboxOf(s.tenant, "AvaliacaoConcluida").forEach {
+            ContractSchemas.assertValid("avaliacao-concluida.v1.json", it)
+        }
+        val doraEvent = events.map(json::readTree).first {
+            it.get("data").get("employee_id").asText() == dora.id.toString()
+        }
         assertEquals("Q6", doraEvent.get("data").get("quadrant").asText())
         assertTrue(doraEvent.get("data").get("calibrated").asBoolean())
 
@@ -121,12 +131,20 @@ class CalibrationFlowIT : IntegrationTestBase() {
             "/v1/cycles/$cycle/evaluations/self", worker,
             mapOf("performance_score" to "9", "competencies" to emptyList<Any>()), expect = 422,
         )
-        val body = mapOf("performance_score" to "3", "competencies" to listOf(mapOf("competency" to "Entrega", "score" to 4)))
+        val body = mapOf(
+            "performance_score" to "3",
+            "competencies" to listOf(mapOf("competency" to "Entrega", "score" to 4)),
+        )
         api.post("/v1/cycles/$cycle/evaluations/self", worker, body)
         api.post("/v1/cycles/$cycle/evaluations/self", worker, body, expect = 409)
         api.post(
             "/v1/cycles/$cycle/evaluations/manager", manager,
-            mapOf("employee_id" to manager.id, "performance_score" to "3", "potential_score" to "3", "competencies" to emptyList<Any>()),
+            mapOf(
+                "employee_id" to manager.id,
+                "performance_score" to "3",
+                "potential_score" to "3",
+                "competencies" to emptyList<Any>(),
+            ),
             expect = 422,
         )
         val progress = api.get("/v1/cycles/$cycle/evaluations", manager)
@@ -165,7 +183,8 @@ class CalibrationFlowIT : IntegrationTestBase() {
         assertEquals("3", api.get("/v1/nine-box/policy", admin).get("performance").get("high_from").asText())
         api.put("/v1/nine-box/policy", admin, policyBody("4", "3"), expect = 422)
         // Outro tenant continua com o padrão.
-        assertEquals("3.75", api.get("/v1/nine-box/policy", Person(newTenant(), ADMIN)).get("performance").get("high_from").asText())
+        val other = Person(newTenant(), ADMIN)
+        assertEquals("3.75", api.get("/v1/nine-box/policy", other).get("performance").get("high_from").asText())
     }
 
     @Test
@@ -176,18 +195,40 @@ class CalibrationFlowIT : IntegrationTestBase() {
         val bia = s.staff[0]
         val caio = s.staff[1]
 
-        val position = api.post("/v1/critical-positions", s.manager, mapOf("title" to "Gerente de Obras", "incumbent_id" to caio.id))
+        val position = api.post(
+            "/v1/critical-positions",
+            s.manager,
+            mapOf("title" to "Gerente de Obras", "incumbent_id" to caio.id),
+        )
         val positionId = position.get("position_id").asText()
         assertEquals("NONE", position.get("bench_strength").asText())
-        api.post("/v1/critical-positions/$positionId/successors", s.manager, mapOf("employee_id" to caio.id, "readiness" to "READY_NOW"), expect = 422)
-        val plan = api.post("/v1/critical-positions/$positionId/successors", s.manager, mapOf("employee_id" to bia.id, "readiness" to "READY_NOW"))
+        api.post(
+            "/v1/critical-positions/$positionId/successors",
+            s.manager,
+            mapOf("employee_id" to caio.id, "readiness" to "READY_NOW"),
+            expect = 422,
+        )
+        val plan = api.post(
+            "/v1/critical-positions/$positionId/successors",
+            s.manager,
+            mapOf("employee_id" to bia.id, "readiness" to "READY_NOW"),
+        )
         assertEquals("ADEQUATE", plan.get("bench_strength").asText())
         assertEquals("Bia Exemplo", plan.get("successors")[0].get("employee_name").asText())
-        api.post("/v1/critical-positions/$positionId/successors", s.manager, mapOf("employee_id" to bia.id, "readiness" to "READY_NOW"), expect = 409)
+        api.post(
+            "/v1/critical-positions/$positionId/successors",
+            s.manager,
+            mapOf("employee_id" to bia.id, "readiness" to "READY_NOW"),
+            expect = 409,
+        )
         // Bia: Q9 e 2 anos na função, pronta agora. Dora (Q3, potencial baixo) não é indicada.
-        assertEquals("READY_NOW", api.get("/v1/critical-positions/$positionId/successors/${bia.id}/readiness-suggestion", s.manager).get("suggestion").asText())
+        val biaSuggestion =
+            api.get("/v1/critical-positions/$positionId/successors/${bia.id}/readiness-suggestion", s.manager)
+        assertEquals("READY_NOW", biaSuggestion.get("suggestion").asText())
         val dora = s.staff[2]
-        assertTrue(api.get("/v1/critical-positions/$positionId/successors/${dora.id}/readiness-suggestion", s.manager).get("suggestion").isNull)
+        val doraSuggestion =
+            api.get("/v1/critical-positions/$positionId/successors/${dora.id}/readiness-suggestion", s.manager)
+        assertTrue(doraSuggestion.get("suggestion").isNull)
 
         // PDI da Bia: gap de 3 pontos em Entrega vira sugestão; nada entra no plano sem POST.
         val pdi = api.get("/v1/employees/${bia.id}/pdi", bia)
@@ -196,9 +237,28 @@ class CalibrationFlowIT : IntegrationTestBase() {
         assertEquals(0, pdi.get("actions").size())
         api.get("/v1/employees/${bia.id}/pdi", caio, expect = 403)
         val due = LocalDate.now().plusMonths(3).toString()
-        api.post("/v1/employees/${bia.id}/pdi/actions", bia, mapOf("title" to "x", "kind" to "COURSE", "due_on" to due), expect = 422)
-        api.post("/v1/employees/${bia.id}/pdi/actions", bia, mapOf("title" to "Curso", "kind" to "COURSE", "due_on" to "2020-01-01"), expect = 422)
-        val action = api.post("/v1/employees/${bia.id}/pdi/actions", s.manager, mapOf("title" to "Mentoria de entrega", "kind" to "MENTORING", "competency" to "Entrega", "due_on" to due))
+        api.post(
+            "/v1/employees/${bia.id}/pdi/actions",
+            bia,
+            mapOf("title" to "x", "kind" to "COURSE", "due_on" to due),
+            expect = 422,
+        )
+        api.post(
+            "/v1/employees/${bia.id}/pdi/actions",
+            bia,
+            mapOf("title" to "Curso", "kind" to "COURSE", "due_on" to "2020-01-01"),
+            expect = 422,
+        )
+        val action = api.post(
+            "/v1/employees/${bia.id}/pdi/actions",
+            s.manager,
+            mapOf(
+                "title" to "Mentoria de entrega",
+                "kind" to "MENTORING",
+                "competency" to "Entrega",
+                "due_on" to due,
+            ),
+        )
         val id = action.get("id").asText()
         api.patch("/v1/pdi-actions/$id", bia, mapOf("status" to "DONE"))
         api.patch("/v1/pdi-actions/$id", bia, mapOf("status" to "PLANNED"), expect = 422)

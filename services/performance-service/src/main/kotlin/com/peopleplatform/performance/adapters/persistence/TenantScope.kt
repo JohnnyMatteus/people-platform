@@ -22,7 +22,8 @@ class TenantScope(txManager: PlatformTransactionManager) {
     @PersistenceContext
     private lateinit var em: EntityManager
 
-    fun <T> run(tenantId: TenantId, block: () -> T): T = inTransaction("app.tenant_id", tenantId.value.toString(), block)
+    fun <T> run(tenantId: TenantId, block: () -> T): T =
+        inTransaction("app.tenant_id", tenantId.value.toString(), block)
 
     /** Só para o relay da outbox, que lê eventos de todos os tenants. */
     fun <T> runAsPlatform(block: () -> T): T = inTransaction("app.platform", "on", block)

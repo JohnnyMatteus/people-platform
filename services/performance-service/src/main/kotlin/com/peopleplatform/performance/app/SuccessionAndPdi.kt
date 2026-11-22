@@ -78,7 +78,12 @@ class SuccessionService(
             val nominated = domain.nominate(EmployeeId(employee), readiness, caller.employeeId, clock.instant())
             successors.save(
                 SuccessorEntity(
-                    positionId, employee, caller.tenantId.value, nominated.readiness, caller.employeeId.value, nominated.at,
+                    positionId,
+                    employee,
+                    caller.tenantId.value,
+                    nominated.readiness,
+                    caller.employeeId.value,
+                    nominated.at,
                 ),
             )
             plan(caller, entity, names())
@@ -91,7 +96,12 @@ class SuccessionService(
         val latest = history.findByEmployeeIdOrderByClosedAtAsc(employee).lastOrNull() ?: return@run null
         val months = Period.between(person.roleSince, LocalDate.now(clock.withZone(ZoneOffset.UTC))).toTotalMonths()
         ReadinessAdvisor.suggest(
-            HistoryEntry(CycleId(latest.cycleId), Quadrant.valueOf(latest.quadrant), latest.calibrated, latest.closedAt),
+            HistoryEntry(
+                CycleId(latest.cycleId),
+                Quadrant.valueOf(latest.quadrant),
+                latest.calibrated,
+                latest.closedAt,
+            ),
             months.toInt().coerceAtLeast(0),
         )
     }
@@ -113,7 +123,9 @@ class SuccessionService(
         return PlanView(
             entity.id, entity.title, entity.incumbentId, entity.incumbentId?.let { names[it] },
             domain.benchStrength(),
-            domain.ranked.map { SuccessorView(it.employeeId.value, names[it.employeeId.value] ?: "Colaborador", it.readiness) },
+            domain.ranked.map {
+                SuccessorView(it.employeeId.value, names[it.employeeId.value] ?: "Colaborador", it.readiness)
+            },
         )
     }
 }
@@ -150,12 +162,21 @@ class PdiService(
             employee, latestGaps(employee), actions.findByEmployeeIdOrderByDueOnAsc(employee).map { it.view() },
             PdiAdvisor.suggest(
                 latestGaps(employee),
-                history.findByEmployeeIdOrderByClosedAtAsc(employee).lastOrNull()?.let { Quadrant.valueOf(it.quadrant) },
+                history.findByEmployeeIdOrderByClosedAtAsc(employee).lastOrNull()?.let {
+                    Quadrant.valueOf(it.quadrant)
+                },
             ),
         )
     }
 
-    fun add(caller: Caller, employee: UUID, title: String, competency: String?, kind: PdiActionKind, dueOn: LocalDate): PdiActionView =
+    fun add(
+        caller: Caller,
+        employee: UUID,
+        title: String,
+        competency: String?,
+        kind: PdiActionKind,
+        dueOn: LocalDate,
+    ): PdiActionView =
         scope.run(caller.tenantId) {
             authorize(caller, employee)
             if (title.trim().length < 3) throw DomainException("título da ação precisa de ao menos 3 caracteres")
@@ -164,8 +185,16 @@ class PdiService(
             }
             actions.save(
                 PdiActionEntity(
-                    UUID.randomUUID(), caller.tenantId.value, employee, title.trim(), competency?.trim()?.ifBlank { null },
-                    kind, dueOn, PdiActionStatus.PLANNED, caller.employeeId.value, clock.instant(),
+                    UUID.randomUUID(),
+                    caller.tenantId.value,
+                    employee,
+                    title.trim(),
+                    competency?.trim()?.ifBlank { null },
+                    kind,
+                    dueOn,
+                    PdiActionStatus.PLANNED,
+                    caller.employeeId.value,
+                    clock.instant(),
                 ),
             ).view()
         }

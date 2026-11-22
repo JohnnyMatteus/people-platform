@@ -31,7 +31,8 @@ class Problems {
     fun unreadable(e: HttpMessageNotReadableException): ProblemDetail {
         // Invariantes do domínio lançadas na construção do DTO chegam embrulhadas pelo Jackson.
         val cause = generateSequence<Throwable>(e) { it.cause }.filterIsInstance<DomainException>().firstOrNull()
-        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "corpo-invalido", cause?.message ?: "corpo da requisição inválido")
+        val detail = cause?.message ?: "corpo da requisição inválido"
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "corpo-invalido", detail)
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)

@@ -30,7 +30,11 @@ class OutboxRelayIT : IntegrationTestBase() {
     private fun kafka(failing: Boolean): KafkaTemplate<String, String> {
         val template = Mockito.mock(KafkaTemplate::class.java) as KafkaTemplate<String, String>
         val future: CompletableFuture<Any?> =
-            if (failing) CompletableFuture.failedFuture(IllegalStateException("broker fora")) else CompletableFuture.completedFuture(null)
+            if (failing) {
+                CompletableFuture.failedFuture(IllegalStateException("broker fora"))
+            } else {
+                CompletableFuture.completedFuture(null)
+            }
         Mockito.doReturn(future).`when`(template).send(ArgumentMatchers.any<Message<*>>())
         return template
     }
@@ -44,7 +48,8 @@ class OutboxRelayIT : IntegrationTestBase() {
         val before = pending()
         assertTrue(before >= 3)
 
-        val broken = OutboxRelay(scope, outbox, kafka(failing = true), Clock.systemUTC(), "people.performance.events.v1")
+        val topic = "people.performance.events.v1"
+        val broken = OutboxRelay(scope, outbox, kafka(failing = true), Clock.systemUTC(), topic)
         assertEquals(0, broken.relayOnce())
         assertEquals(before, pending())
         assertTrue(scope.runAsPlatform { outbox.findAll().any { it.attempts > 0 && it.lastError != null } })

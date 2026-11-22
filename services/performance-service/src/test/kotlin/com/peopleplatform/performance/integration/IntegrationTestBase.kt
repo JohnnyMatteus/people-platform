@@ -30,7 +30,11 @@ abstract class IntegrationTestBase {
         private val admin: Triple<String, String, String> by lazy {
             val url = System.getenv("TEST_PG_URL")
             if (url != null) {
-                Triple(url, System.getenv("TEST_PG_USER") ?: "postgres", System.getenv("TEST_PG_PASSWORD") ?: "postgres")
+                Triple(
+                    url,
+                    System.getenv("TEST_PG_USER") ?: "postgres",
+                    System.getenv("TEST_PG_PASSWORD") ?: "postgres",
+                )
             } else {
                 val container = PostgreSQLContainer("postgres:17.6-alpine").also { it.start() }
                 Triple(container.jdbcUrl, container.username, container.password)

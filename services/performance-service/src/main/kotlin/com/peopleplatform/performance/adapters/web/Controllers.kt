@@ -121,7 +121,12 @@ data class NominationBody(val employeeId: UUID, val readiness: Readiness)
 @JsonInclude(JsonInclude.Include.ALWAYS)
 data class ReadinessOut(val suggestion: Readiness?)
 
-data class PdiActionBody(val title: String, val kind: PdiActionKind, val dueOn: LocalDate, val competency: String? = null)
+data class PdiActionBody(
+    val title: String,
+    val kind: PdiActionKind,
+    val dueOn: LocalDate,
+    val competency: String? = null,
+)
 
 data class PdiStatusBody(val status: PdiActionStatus)
 
@@ -130,8 +135,14 @@ data class PdiStatusBody(val status: PdiActionStatus)
 private fun PolicyBody.toDomain(caller: com.peopleplatform.performance.app.Caller) = NineBoxPolicy(
     tenantId = caller.tenantId,
     scale = Scale(parseDecimal(scaleMin, "scale_min"), parseDecimal(scaleMax, "scale_max")),
-    performance = AxisThresholds(parseDecimal(performance.mediumFrom, "medium_from"), parseDecimal(performance.highFrom, "high_from")),
-    potential = AxisThresholds(parseDecimal(potential.mediumFrom, "medium_from"), parseDecimal(potential.highFrom, "high_from")),
+    performance = AxisThresholds(
+        parseDecimal(performance.mediumFrom, "medium_from"),
+        parseDecimal(performance.highFrom, "high_from"),
+    ),
+    potential = AxisThresholds(
+        parseDecimal(potential.mediumFrom, "medium_from"),
+        parseDecimal(potential.highFrom, "high_from"),
+    ),
     maxStepsPerAxis = maxStepsPerAxis,
     topBoxWarningShare = parseDecimal(topBoxWarningShare, "top_box_warning_share"),
     minJustificationLength = minJustificationLength,
@@ -250,7 +261,11 @@ class CycleController(private val cycles: CycleService, private val evaluations:
 
     @PostMapping("/v1/cycles/{cycleId}/evaluations/self")
     @ResponseStatus(HttpStatus.CREATED)
-    fun self(@AuthenticationPrincipal jwt: Jwt, @PathVariable cycleId: UUID, @RequestBody body: SelfEvaluationBody): EvaluationView =
+    fun self(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable cycleId: UUID,
+        @RequestBody body: SelfEvaluationBody,
+    ): EvaluationView =
         evaluations.submitSelf(
             jwt.caller(), cycleId,
             EvaluationInput(null, body.performanceScore, null, body.competencies, body.comment),
@@ -258,10 +273,20 @@ class CycleController(private val cycles: CycleService, private val evaluations:
 
     @PostMapping("/v1/cycles/{cycleId}/evaluations/manager")
     @ResponseStatus(HttpStatus.CREATED)
-    fun manager(@AuthenticationPrincipal jwt: Jwt, @PathVariable cycleId: UUID, @RequestBody body: ManagerEvaluationBody): EvaluationView =
+    fun manager(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable cycleId: UUID,
+        @RequestBody body: ManagerEvaluationBody,
+    ): EvaluationView =
         evaluations.submitManager(
             jwt.caller(), cycleId,
-            EvaluationInput(body.employeeId, body.performanceScore, body.potentialScore, body.competencies, body.comment),
+            EvaluationInput(
+                body.employeeId,
+                body.performanceScore,
+                body.potentialScore,
+                body.competencies,
+                body.comment,
+            ),
         )
 }
 
@@ -277,7 +302,11 @@ class SuccessionController(private val succession: SuccessionService) {
 
     @PostMapping("/v1/critical-positions/{positionId}/successors")
     @ResponseStatus(HttpStatus.CREATED)
-    fun nominate(@AuthenticationPrincipal jwt: Jwt, @PathVariable positionId: UUID, @RequestBody body: NominationBody): PlanView =
+    fun nominate(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable positionId: UUID,
+        @RequestBody body: NominationBody,
+    ): PlanView =
         succession.nominate(jwt.caller(), positionId, body.employeeId, body.readiness)
 
     @GetMapping("/v1/critical-positions/{positionId}/successors/{employeeId}/readiness-suggestion")
@@ -292,10 +321,18 @@ class PdiController(private val pdi: PdiService) {
 
     @PostMapping("/v1/employees/{employeeId}/pdi/actions")
     @ResponseStatus(HttpStatus.CREATED)
-    fun add(@AuthenticationPrincipal jwt: Jwt, @PathVariable employeeId: UUID, @RequestBody body: PdiActionBody): PdiActionView =
+    fun add(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable employeeId: UUID,
+        @RequestBody body: PdiActionBody,
+    ): PdiActionView =
         pdi.add(jwt.caller(), employeeId, body.title, body.competency, body.kind, body.dueOn)
 
     @PatchMapping("/v1/pdi-actions/{actionId}")
-    fun status(@AuthenticationPrincipal jwt: Jwt, @PathVariable actionId: UUID, @RequestBody body: PdiStatusBody): PdiActionView =
+    fun status(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable actionId: UUID,
+        @RequestBody body: PdiStatusBody,
+    ): PdiActionView =
         pdi.updateStatus(jwt.caller(), actionId, body.status)
 }

@@ -163,7 +163,13 @@ class EvaluationService(
             val me = caller.employeeId.value
             if (!employees.existsById(me)) {
                 employees.save(
-                    EmployeeEntity(me, caller.tenantId.value, caller.name ?: "Colaborador", "Cargo não informado", LocalDate.now(clock)),
+                    EmployeeEntity(
+                        me,
+                        caller.tenantId.value,
+                        caller.name ?: "Colaborador",
+                        "Cargo não informado",
+                        LocalDate.now(clock),
+                    ),
                 )
             }
             val performance = parseDecimal(input.performanceScore, "nota de desempenho")
@@ -181,7 +187,8 @@ class EvaluationService(
             if (target == caller.employeeId.value) throw DomainException("ninguém avalia a si mesmo como gestor")
             if (!employees.existsById(target)) throw DomainException("colaborador não cadastrado neste tenant")
             val performance = parseDecimal(input.performanceScore, "nota de desempenho")
-            val potential = parseDecimal(input.potentialScore ?: throw DomainException("nota de potencial é obrigatória"), "nota de potencial")
+            val potentialInput = input.potentialScore ?: throw DomainException("nota de potencial é obrigatória")
+            val potential = parseDecimal(potentialInput, "nota de potencial")
             requireScoreInRange(performance, policy.scale.min, policy.scale.max, "desempenho")
             requireScoreInRange(potential, policy.scale.min, policy.scale.max, "potencial")
             val saved = save(caller, cycleId, target, EvaluationKind.MANAGER, performance, potential, input)
@@ -219,8 +226,17 @@ class EvaluationService(
         }
         val entity = evaluations.save(
             EvaluationEntity(
-                UUID.randomUUID(), caller.tenantId.value, cycleId, employee, wire, caller.employeeId.value,
-                performance, potential, json.writeValueAsString(input.competencies), input.comment?.trim(), clock.instant(),
+                UUID.randomUUID(),
+                caller.tenantId.value,
+                cycleId,
+                employee,
+                wire,
+                caller.employeeId.value,
+                performance,
+                potential,
+                json.writeValueAsString(input.competencies),
+                input.comment?.trim(),
+                clock.instant(),
             ),
         )
         return EvaluationView(

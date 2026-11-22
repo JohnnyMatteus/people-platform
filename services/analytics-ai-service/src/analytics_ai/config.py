@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     kafka_brokers: str = Field("", alias="KAFKA_BROKERS")
     kafka_group_id: str = Field("analytics-ai-service", alias="KAFKA_GROUP_ID")
     kafka_topics: str = Field(
-        "people.performance.events.v1,people.recruitment.events.v1,people.engagement.events.v1",
+        "people.performance.events.v1,people.recruitment.events.v1,"
+        "people.engagement.events.v1,people.directory.events.v1",
         alias="KAFKA_TOPICS",
     )
 

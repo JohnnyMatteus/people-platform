@@ -25,6 +25,9 @@ class InMemoryRepository:
     async def upsert_employment(self, record: EmploymentRecord) -> None:
         self._employment[record.tenant_id][record.employee_id] = record
 
+    async def get_employment(self, tenant_id: UUID, employee_id: UUID) -> EmploymentRecord | None:
+        return self._employment[tenant_id].get(employee_id)
+
     async def list_employment(self, tenant_id: UUID) -> list[EmploymentRecord]:
         return list(self._employment[tenant_id].values())
 

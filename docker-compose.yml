@@ -82,7 +82,7 @@ services:
     command:
       - |
         set -euo pipefail
-        for topic in people.tenant.events.v1 people.performance.events.v1 people.recruitment.events.v1 people.engagement.events.v1; do
+        for topic in people.tenant.events.v1 people.performance.events.v1 people.recruitment.events.v1 people.engagement.events.v1 people.directory.events.v1; do
           kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$topic" --partitions 6 --replication-factor 1
         done
     restart: "no"

@@ -30,6 +30,7 @@ class EmploymentRecord:
     birth_year: int | None = None
     gender: str = UNKNOWN
     terminated_on: date | None = None
+    age_band: str = UNKNOWN  # faixa já agregada pelo produtor; usada quando não há birth_year
 
     def active_on(self, day: date) -> bool:
         return self.hired_on <= day and (self.terminated_on is None or self.terminated_on > day)

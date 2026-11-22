@@ -19,6 +19,7 @@ info:
     - name: performance
     - name: recruitment
     - name: engagement
+    - name: directory
 defaultContentType: application/json
 servers:
   local:
@@ -56,6 +57,14 @@ channels:
         $ref: '#/components/messages/ElogioPublicado'
       PesquisaClimaEncerrada:
         $ref: '#/components/messages/PesquisaClimaEncerrada'
+  directoryEvents:
+    address: people.directory.events.v1
+    description: "Eventos do cadastro de pessoas (produtor: people-directory, a integração com o RH do cliente)."
+    messages:
+      ColaboradorAtualizado:
+        $ref: '#/components/messages/ColaboradorAtualizado'
+      ColaboradorDesligado:
+        $ref: '#/components/messages/ColaboradorDesligado'
 operations:
   publishTenantEvents:
     action: send
@@ -88,6 +97,22 @@ operations:
     messages:
       - $ref: '#/channels/engagementEvents/messages/ElogioPublicado'
       - $ref: '#/channels/engagementEvents/messages/PesquisaClimaEncerrada'
+  publishDirectoryEvents:
+    action: send
+    description: "Publicado pela integração com o RH via transactional outbox."
+    channel:
+      $ref: '#/channels/directoryEvents'
+    messages:
+      - $ref: '#/channels/directoryEvents/messages/ColaboradorAtualizado'
+      - $ref: '#/channels/directoryEvents/messages/ColaboradorDesligado'
+  projectHeadcountAndTurnover:
+    action: receive
+    description: "analytics-ai-service projeta vínculos (área, unidade, faixa etária) e desligamentos nos agregados de turnover."
+    channel:
+      $ref: '#/channels/directoryEvents'
+    messages:
+      - $ref: '#/channels/directoryEvents/messages/ColaboradorAtualizado'
+      - $ref: '#/channels/directoryEvents/messages/ColaboradorDesligado'
   provisionTenantOnCreated:
     action: receive
     description: "Todos os serviços consomem para provisionar o tenant e ligar/desligar módulos conforme as features."
@@ -232,6 +257,36 @@ components:
           bindingVersion: 0.5.0
       payload:
         $ref: './schemas/pesquisa-clima-encerrada.v1.json'
+    ColaboradorAtualizado:
+      name: ColaboradorAtualizado
+      title: Colaborador criado ou atualizado (só agregáveis)
+      summary: Colaborador criado ou atualizado (só agregáveis).
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/colaborador-atualizado.v1.json'
+    ColaboradorDesligado:
+      name: ColaboradorDesligado
+      title: Colaborador desligado (só agregáveis)
+      summary: Colaborador desligado (só agregáveis).
+      headers:
+        $ref: '#/components/schemas/KafkaHeaders'
+      bindings:
+        kafka:
+          key:
+            type: string
+            format: uuid
+            description: tenant_id
+          bindingVersion: 0.5.0
+      payload:
+        $ref: './schemas/colaborador-desligado.v1.json'
   schemas:
     KafkaHeaders:
       type: object

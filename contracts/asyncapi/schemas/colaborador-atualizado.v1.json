@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/colaborador-atualizado.v1.json",
+  "title": "ColaboradorAtualizado v1",
+  "description": "Um vínculo foi criado ou alterado no cadastro de pessoas. Só traz o necessário para analytics: área, unidade e faixa etária agregada; sem nome, contato, data de nascimento ou gênero. employee_id é opaco.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "event_type": {
+      "const": "ColaboradorAtualizado"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "producer": {
+      "const": "people-directory"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "employee_id",
+        "hired_on",
+        "area",
+        "unit",
+        "age_band"
+      ],
+      "properties": {
+        "employee_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "hired_on": {
+          "type": "string",
+          "format": "date"
+        },
+        "area": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "<25",
+            "25-34",
+            "35-44",
+            "45-54",
+            "55+",
+            "nao-informado"
+          ]
+        }
+      }
+    }
+  }
+}

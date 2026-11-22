@@ -11,6 +11,7 @@ from conftest import TENANT_A, TENANT_B, fixture
 
 SCHEMAS = Path(__file__).resolve().parents[3] / "contracts" / "asyncapi" / "schemas"
 NAMES = ["candidato-contratado", "avaliacao-concluida", "nine-box-calibrado", "pesquisa-clima-encerrada"]
+DIRECTORY = ["colaborador-atualizado", "colaborador-desligado"]
 
 
 def _registry() -> Registry:
@@ -22,7 +23,7 @@ def _registry() -> Registry:
     return reg
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", NAMES + DIRECTORY)
 def test_fixtures_match_contract_schemas(name):
     schema = json.loads((SCHEMAS / f"{name}.v1.json").read_text())
     jsonschema.validate(fixture(name), schema, registry=_registry())
@@ -67,3 +68,30 @@ async def test_unknown_event_type_is_ignored(repo):
     other = fixture("candidato-contratado")
     other["event_type"] = "ElogioPublicado"
     assert await EventIngestor(repo).handle(other) is False
+
+
+async def test_directory_events_build_employment_with_termination(repo):
+    ing = EventIngestor(repo)
+    assert await ing.handle(fixture("colaborador-atualizado")) is True
+    assert await ing.handle(fixture("colaborador-desligado")) is True
+    (record,) = await repo.list_employment(TENANT_A)
+    assert (record.area, record.unit, record.age_band) == ("Tecnologia", "Matriz", "25-34")
+    assert record.hired_on.isoformat() == "2024-03-04"
+    assert record.terminated_on.isoformat() == "2026-08-20"
+
+
+async def test_update_after_termination_keeps_termination(repo):
+    ing = EventIngestor(repo)
+    await ing.handle(fixture("colaborador-desligado"))
+    later = fixture("colaborador-atualizado")
+    later["event_id"] = "00000000-0000-4000-8000-0000000000a3"
+    await ing.handle(later)
+    (record,) = await repo.list_employment(TENANT_A)
+    assert record.terminated_on is not None and record.hired_on.isoformat() == "2024-03-04"
+
+
+async def test_directory_event_rejects_personal_fields(repo):
+    bad = fixture("colaborador-atualizado")
+    bad["data"]["birth_year"] = 1990
+    with pytest.raises(InvalidEventError):
+        await EventIngestor(repo).handle(bad)

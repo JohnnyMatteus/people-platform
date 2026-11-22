@@ -33,6 +33,23 @@ class CandidatoContratadoData(_Data):
     start_date: date
 
 
+class ColaboradorAtualizadoData(_Data):
+    employee_id: UUID
+    hired_on: date
+    area: str = Field(max_length=80)
+    unit: str = Field(max_length=80)
+    age_band: str = Field(pattern=r"^(<25|25-34|35-44|45-54|55\+|nao-informado)$")
+
+
+class ColaboradorDesligadoData(_Data):
+    employee_id: UUID
+    terminated_on: date
+    voluntary: bool | None = None
+    area: str = Field(max_length=80)
+    unit: str = Field(max_length=80)
+    age_band: str = Field(pattern=r"^(<25|25-34|35-44|45-54|55\+|nao-informado)$")
+
+
 class GapData(BaseModel):
     competency: str
     gap: int = Field(ge=0)

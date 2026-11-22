@@ -20,6 +20,8 @@ from analytics_ai.domain.models import (
 from .events import (
     AvaliacaoConcluidaData,
     CandidatoContratadoData,
+    ColaboradorAtualizadoData,
+    ColaboradorDesligadoData,
     Envelope,
     NineBoxCalibradoData,
     PesquisaClimaEncerradaData,
@@ -38,6 +40,8 @@ class EventIngestor:
         self._repo = repo
         self._handlers: dict[str, Callable[[Envelope], Awaitable[None]]] = {
             "CandidatoContratado": self._hired,
+            "ColaboradorAtualizado": self._updated,
+            "ColaboradorDesligado": self._terminated,
             "AvaliacaoConcluida": self._assessment,
             "NineBoxCalibrado": self._nine_box,
             "PesquisaClimaEncerrada": self._survey,
@@ -69,6 +73,38 @@ class EventIngestor:
         await self._repo.upsert_employment(
             EmploymentRecord(
                 tenant_id=e.tenant_id, employee_id=d.application_id, hired_on=d.start_date, unit=d.unit
+            )
+        )
+
+    async def _updated(self, e: Envelope) -> None:
+        d = ColaboradorAtualizadoData.model_validate(e.data)
+        current = await self._repo.get_employment(e.tenant_id, d.employee_id)
+        await self._repo.upsert_employment(
+            EmploymentRecord(
+                tenant_id=e.tenant_id,
+                employee_id=d.employee_id,
+                hired_on=d.hired_on,
+                area=d.area,
+                unit=d.unit,
+                age_band=d.age_band,
+                terminated_on=current.terminated_on if current else None,
+            )
+        )
+
+    async def _terminated(self, e: Envelope) -> None:
+        d = ColaboradorDesligadoData.model_validate(e.data)
+        current = await self._repo.get_employment(e.tenant_id, d.employee_id)
+        # Desligamento chegando antes da atualização (ordem não garantida entre tópicos) cria o vínculo
+        # com a data de desligamento como admissão provisória; a próxima atualização corrige hired_on.
+        await self._repo.upsert_employment(
+            EmploymentRecord(
+                tenant_id=e.tenant_id,
+                employee_id=d.employee_id,
+                hired_on=current.hired_on if current else d.terminated_on,
+                area=d.area,
+                unit=d.unit,
+                age_band=d.age_band,
+                terminated_on=d.terminated_on,
             )
         )
 

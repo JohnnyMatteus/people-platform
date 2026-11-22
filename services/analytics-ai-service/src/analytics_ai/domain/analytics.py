@@ -72,7 +72,7 @@ def group_key(record: EmploymentRecord, group_by: GroupBy, at: date) -> str:
         case GroupBy.GENDER:
             return record.gender
         case GroupBy.AGE_BAND:
-            return age_band(record.birth_year, at)
+            return age_band(record.birth_year, at) if record.birth_year is not None else record.age_band
         case GroupBy.TENURE_BAND:
             return tenure_band(tenure_months(record, at))
 

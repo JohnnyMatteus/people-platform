@@ -1,15 +1,19 @@
 # Imagem de desenvolvimento do recruitment-service. Produção usaria php-fpm + nginx (ver Próximos passos).
-FROM composer:2.8.12 AS vendor
+# O estágio de dependências usa o mesmo PHP e as mesmas extensões da imagem final: o composer
+# confere ext-* e versão do PHP contra o composer.lock (ext-bcmath vem do longlang/phpkafka).
+FROM php:8.4.12-cli-alpine3.22 AS vendor
+RUN docker-php-ext-install bcmath
+COPY --from=composer:2.8.12 /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 
 FROM php:8.4.12-cli-alpine3.22
 RUN apk add --no-cache libpq postgresql-dev \
-    && docker-php-ext-install pdo_pgsql opcache \
+    && docker-php-ext-install pdo_pgsql opcache bcmath \
     && apk del postgresql-dev
 WORKDIR /app
-COPY --from=vendor /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.8.12 /usr/bin/composer /usr/bin/composer
 COPY --from=vendor /app/vendor ./vendor
 COPY . .
 RUN composer dump-autoload --no-dev --optimize --no-scripts \

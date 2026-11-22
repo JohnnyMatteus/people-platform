@@ -39,11 +39,11 @@ Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pront
 | --- | --- | --- | --- |
 | [`services/tenant-service`](services/tenant-service) | Go | Tenants, planos e features, white label, domínios, resolução de tenant | ✅ |
 | [`services/engagement-service`](services/engagement-service) | TypeScript + NestJS | Feedback, elogios, 1:1, clima anônimo, gamificação, rede social | ✅ |
-| [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI | 🟡 núcleo de domínio |
+| [`services/performance-service`](services/performance-service) | Kotlin + Spring Boot | Avaliações, calibração, nine box, sucessão, assessment, OKRs e PDI | 🟡 API, RLS e outbox; sem consumo de eventos |
 | [`services/recruitment-service`](services/recruitment-service) | PHP + Laravel | ATS: vagas, candidaturas, pipeline por tenant, entrevistas, scorecards, `CandidatoContratado` | ✅ |
 | [`services/analytics-ai-service`](services/analytics-ai-service) | Python + FastAPI | People analytics e recursos de IA | 🟡 consumo de eventos e IA com guardas |
 | `services/learning-service` | a definir | Aprendizagem (LXM) | 📋 |
-| `web/` | Vue 3 | Front-end white label | 📋 |
+| [`web/`](web) | Vue 3 + Vuetify | Front-end white label (tema Grafite): nine box e calibração; demais telas são esqueleto | 🟡 |
 
 | Plataforma | Tecnologia |
 | --- | --- |
@@ -91,7 +91,7 @@ O desenho completo está no [design doc](docs/design-doc.md): bounded contexts, 
 
 ## Como rodar
 
-Pré-requisitos: Docker com Compose v2, Go 1.26+ e Node 20+ (só para o lint de contratos). Java e Gradle **não** são necessários, porque o performance-service compila e testa na imagem `gradle:8.14.3-jdk21`.
+Pré-requisitos: Docker com Compose v2, Go 1.26+ e Node 20+ (só para o lint de contratos). Java e Gradle **não** são necessários, porque o performance-service compila e testa na imagem `gradle:8.14.3-jdk21`. Para o `web/`, Node 22.
 
 ```bash
 cp .env.example .env          # opcional: os padrões do compose já funcionam
@@ -100,11 +100,12 @@ make tenant-service-up        # build + migração + tenant-service
 make recruitment-service-up   # build + migração + relay + recruitment-service (porta 8082)
 make engagement-service-up    # build + migração + engagement-service (porta 8083)
 make analytics-ai-service-up  # build + analytics-ai-service (porta 8084)
+make performance-service-up   # build + performance-service, migração Flyway na subida (porta 8085)
 make seed                     # os dois tenants fictícios (IDs iguais aos do realm do Keycloak)
 make smoke                    # fluxo ponta a ponta pelo gateway com tokens reais
 ```
 
-Para subir também observabilidade e ferramentas: `make up-all`. Portas no host: gateway 8000, tenant 8081, recruitment 8082, engagement 8083, analytics-ai 8084 (variáveis `*_SERVICE_PORT` no `.env`). Use `make ps` para ver a saúde dos contêineres e `make down` para parar tudo (ou `make clean` para apagar também os volumes).
+Para subir também observabilidade e ferramentas: `make up-all`. Portas no host: gateway 8000, tenant 8081, recruitment 8082, engagement 8083, analytics-ai 8084, performance 8085 (variáveis `*_SERVICE_PORT` no `.env`). Use `make ps` para ver a saúde dos contêineres e `make down` para parar tudo (ou `make clean` para apagar também os volumes).
 
 | Endereço | O quê | Credencial (só dev) |
 | --- | --- | --- |
@@ -153,7 +154,7 @@ O que os testes cobrem:
   - **contrato:** o evento publicado é validado contra o JSON Schema do AsyncAPI.
 - **performance-service:** classificação nos 9 quadrantes com limiares inclusivos e por tenant, escalas diferentes, política incoerente recusada, calibração (justificativa, limite de faixas contra a posição original, autocalibração, sessão fechada imutável, alerta de topo), histórico e tendência, mapa de sucessão e sugestão de prontidão.
 
-O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) tem um job por serviço, acionado por filtro de caminhos (`dorny/paths-filter`), mais um job de contratos e um de plataforma (compose, KrakenD, realm, ShellCheck).
+O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) tem um job por serviço, acionado por filtro de caminhos (`dorny/paths-filter`), mais jobs de contratos, de `web/` (eslint, vitest, typecheck e build) e de plataforma (compose, KrakenD, realm, ShellCheck). Roda em push para `main` e `feat/**` e em pull requests.
 
 ## Decisões principais
 
@@ -187,12 +188,13 @@ Os roteiros de entrevista sobre os núcleos explicam a solução, as alternativa
 
 ## Próximos passos
 
-1. **performance-service:** camada Spring Boot conforme o [OpenAPI](contracts/openapi/performance-service.yaml), persistência com RLS, consumo de `TenantCriado` e publicação de `NineBoxCalibrado`.
+1. **performance-service:** consumir `TenantCriado` (hoje o tenant só aparece pelo token) e `AvaliacaoConcluida`; OKRs e assessment, que ainda não existem.
 2. **Provisionador do Keycloak:** consumir `TenantCriado` e criar a Organization.
 3. **analytics-ai-service:** adaptador Postgres com RLS no lugar dos read models em memória; produtor real de `ColaboradorAtualizado` e `ColaboradorDesligado` (integração com o RH).
 4. **Fluxo de exclusão de titular (LGPD)** ponta a ponta e limpeza da outbox.
-5. **Front-end Vue 3** consumindo `/branding`, com configurador de tema e prévia de contraste.
-6. **Kubernetes** (Helm e GitOps), Schema Registry e Debezium.
+5. **Front-end:** concluir as telas de avaliações, PDI e sucessão (hoje listas de leitura) e criar as de recrutamento, engajamento e analytics (hoje placeholders); configurador de tema com prévia de contraste.
+6. **learning-service** (LXM), ainda sem código.
+7. **Kubernetes** (Helm e GitOps), Schema Registry e Debezium.
 
 ## Estrutura
 

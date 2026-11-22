@@ -7,14 +7,14 @@ namespace App\Infrastructure\Messaging;
 use longlang\phpkafka\Consumer\Consumer;
 use longlang\phpkafka\Consumer\ConsumerConfig;
 
-/** Lê people.tenant.events.v1. O offset só avança depois de processar (pelo menos uma vez). */
+/** Lê um tópico (tenants ou privacidade). O offset só avança depois de processar (pelo menos uma vez). */
 final class KafkaTenantEventConsumer
 {
     public function __construct(
         private readonly string $brokers,
         private readonly string $topic,
         private readonly string $groupId,
-        private readonly TenantEventHandler $handler,
+        private readonly MessageHandler $handler,
     ) {}
 
     public function run(): void

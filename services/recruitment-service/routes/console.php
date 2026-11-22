@@ -2,6 +2,7 @@
 
 use App\Application\OutboxRelay;
 use App\Infrastructure\Messaging\KafkaTenantEventConsumer;
+use App\Infrastructure\Messaging\PrivacyEventHandler;
 use Illuminate\Support\Facades\Artisan;
 
 Artisan::command('outbox:relay {--once : Esvazia a outbox uma vez e sai}', function (OutboxRelay $relay) {
@@ -27,3 +28,12 @@ Artisan::command('outbox:relay {--once : Esvazia a outbox uma vez e sai}', funct
 Artisan::command('tenant-events:consume', function (KafkaTenantEventConsumer $consumer) {
     $consumer->run();
 })->purpose('Consome TenantCriado do Kafka e prepara os dados do tenant');
+
+Artisan::command('privacy-events:consume', function (PrivacyEventHandler $handler) {
+    (new KafkaTenantEventConsumer(
+        config('recruitment.kafka.brokers'),
+        config('recruitment.kafka.privacy_topic'),
+        config('recruitment.kafka.group_id').'-privacy',
+        $handler,
+    ))->run();
+})->purpose('Consome TitularExclusaoSolicitada e apaga os dados do titular (LGPD)');

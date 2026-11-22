@@ -17,6 +17,8 @@ final class S3ResumeStorage implements ResumeStorage
         private readonly string $bucket,
         private readonly array $allowedContentTypes,
         private readonly int $ttlMinutes,
+        /** Cliente que alcança o S3 pela rede interna; as URLs assinadas usam o endpoint do navegador. */
+        private readonly ?S3Client $objects = null,
     ) {}
 
     public function keyFor(string $tenantId, string $applicationId, string $contentType): string
@@ -53,6 +55,13 @@ final class S3ResumeStorage implements ResumeStorage
         $command = $this->presigner->getCommand('GetObject', ['Bucket' => $this->bucket, 'Key' => $key]);
 
         return (string) $this->presigner->createPresignedRequest($command, '+5 minutes')->getUri();
+    }
+
+    public function delete(string $tenantId, string $key): void
+    {
+        $this->assertOwned($tenantId, $key);
+
+        ($this->objects ?? $this->presigner)->deleteObject(['Bucket' => $this->bucket, 'Key' => $key]);
     }
 
     /** Última barreira contra uma chave de outro tenant chegar a uma URL assinada. */

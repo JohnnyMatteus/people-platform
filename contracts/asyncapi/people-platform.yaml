@@ -90,7 +90,7 @@ operations:
       - $ref: '#/channels/privacyEvents/messages/TitularExclusaoSolicitada'
   eraseDataSubject:
     action: receive
-    description: "learning-service, engagement-service, recruitment-service e analytics-ai-service apagam ou anonimizam os dados do titular no tenant do evento, de forma idempotente (deduplicação por event_id)."
+    description: "learning-service, engagement-service, recruitment-service e analytics-ai-service apagam ou anonimizam os dados do titular no tenant do evento, de forma idempotente (deduplicação por event_id), e gravam uma lápide sem dado pessoal para não recriar o dado se ele chegar depois. subject_id é o id da pessoa em cada serviço (colaborador ou candidato, ids distintos e sem vínculo): um pedido apaga só o que casa com ele. performance-service ainda não consome; não há recibo de conclusão."
     channel:
       $ref: '#/channels/privacyEvents'
     messages:
@@ -236,7 +236,7 @@ components:
     TitularExclusaoSolicitada:
       name: TitularExclusaoSolicitada
       title: Exclusão de titular solicitada
-      summary: Exclusão de titular solicitada.
+      summary: Exclusão de titular solicitada (subject_id é colaborador ou candidato; um pedido por identidade).
       headers:
         $ref: '#/components/schemas/KafkaHeaders'
       bindings:

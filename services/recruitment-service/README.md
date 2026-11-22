@@ -39,7 +39,7 @@ Migrações usam a conexão `migrate` (dono do esquema): `php artisan migrate --
 
 ## Exclusão de titular (LGPD)
 
-`privacy-events:consume` lê `TitularExclusaoSolicitada` e `DataSubjectEraser` apaga, no tenant do evento, candidato, candidaturas, entrevistas, scorecards e o currículo no S3 (o endpoint interno `S3_ENDPOINT` é distinto do de URLs assinadas). Para um colaborador que entrevistou ou avaliou, só a ligação é desfeita. Deduplicação por `event_id`. O relay da outbox registra `attempts` e `last_error` e não deixa um tenant com mensagem recusada travar os outros.
+`privacy-events:consume` lê `TitularExclusaoSolicitada` (exclusão **parcial**, sem recibo de conclusão) e `DataSubjectEraser` apaga, no tenant do evento, candidato, candidaturas, entrevistas, scorecards e o currículo no S3 (o endpoint interno `S3_ENDPOINT` é distinto do de URLs assinadas). Para um colaborador que entrevistou ou avaliou, só a ligação é desfeita. `subject_id` é comparado com `candidates.id` e com `interviewer_id` / `evaluator_id`: candidato e colaborador têm ids diferentes e não há vínculo, então um pedido apaga só o que casa com o id enviado. Aqui o papel da aplicação já tem `DELETE` nas tabelas do ATS (migração 000003) e a exclusão roda nele, presa pela RLS ao tenant; a lápide (`erased_subjects`) só aceita `SELECT` e `INSERT`. Deduplicação por `event_id`. O relay da outbox registra `attempts` e `last_error` e não deixa um tenant com mensagem recusada travar os outros.
 
 ## Fora do escopo desta rodada
 

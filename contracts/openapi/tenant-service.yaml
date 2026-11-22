@@ -350,7 +350,11 @@ paths:
       description: |
         A exclusão nos demais serviços é assíncrona e idempotente, e não há confirmação de volta. O corpo
         leva só o identificador da pessoa; o motivo jurídico e qualquer texto de consentimento ficam fora
-        deste fluxo.
+        deste fluxo. `subject_id` é o id da pessoa nos serviços: o colaborador (o `sub` do token, `employee_id`)
+        ou o candidato (`candidates.id` do recruitment). Candidato e colaborador têm ids diferentes e não há
+        vínculo entre eles, então um pedido apaga só o que casa com o id enviado; para apagar as duas
+        identidades é preciso um pedido por id. O performance-service ainda não consome o evento, e este
+        endpoint não é, sozinho, garantia de conformidade com a LGPD.
       requestBody:
         required: true
         content:
@@ -363,6 +367,7 @@ paths:
                 subject_id:
                   type: string
                   format: uuid
+                  description: Id da pessoa nos serviços (colaborador ou candidato; ver a descrição da operação).
       responses:
         "202":
           description: Pedido aceito e registrado.

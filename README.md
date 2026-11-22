@@ -30,7 +30,7 @@ A People Platform reúne esses módulos numa plataforma única que cada empresa 
 | Aprendizagem (LXM) | Trilhas, matrículas, progresso, sugestão do próximo conteúdo e integração de contratados | 🟡 Implementado em Go (ADR 0012, linguagem a confirmar); sugestão por regra, sem modelo |
 | IA transversal | Feedback, plano de ação do clima, PDI, contexto de 1:1 | 📝 ADR e contrato esboçado |
 | Front-end (Vue 3) | White label por tokens; telas de avaliações, nine box, PDI, sucessão, metas, recrutamento, engajamento, analytics e aprendizagem | 🟡 Telas ligadas à API; falta o configurador de tema |
-| Privacidade (LGPD) | Exclusão por titular propagada por evento (`TitularExclusaoSolicitada`) | 🟡 Produtor no tenant-service; consumidores em learning, engagement, recruitment e analytics. performance ainda não consome |
+| Privacidade (LGPD) | Exclusão por titular propagada por evento (`TitularExclusaoSolicitada`) | 🟡 **PARCIAL.** Produtor no tenant-service; consumidores em learning, engagement, recruitment e analytics. O performance-service não apaga, não há recibo de conclusão, outbox e backups retêm ids, e base legal e consentimento são do autor. Isto não é conformidade com a LGPD |
 
 Legenda: ✅ implementado · 🟡 em andamento · 📝 contrato ou desenho pronto · 📋 planejado.
 
@@ -189,13 +189,21 @@ Os roteiros de entrevista sobre os núcleos explicam a solução, as alternativa
 - **O realm único no Keycloak** simplifica emissor, JWKS e automação, mas compartilha políticas de senha e sessão entre tenants (ADR 0004).
 - **O anonimato forte do clima** impede times pequenos de verem o próprio resultado e impede descobrir o autor, inclusive em casos graves, que têm canal próprio (ADR 0007).
 
+## Privacidade (LGPD): o que existe e o que não
+
+Existe: `POST /v1/tenants/{id}/data-subject-erasures` (admin do tenant) registra o pedido e publica `TitularExclusaoSolicitada`; learning, engagement, recruitment e analytics-ai apagam ou anonimizam o que guardam sobre o `subject_id` no tenant do evento, de forma idempotente, e gravam uma lápide sem dado pessoal para não recriar o dado se ele chegar depois. Nos três serviços cujo papel de banco não tem `DELETE`, a exclusão é uma função `SECURITY DEFINER` presa ao tenant da sessão.
+
+`subject_id` é o id da pessoa em cada serviço: o colaborador (o `sub` do token) em learning, engagement e analytics, e `candidates.id` ou o colaborador entrevistador/avaliador no recruitment. Candidato e colaborador têm ids diferentes e não há vínculo entre eles; um pedido apaga só o que casa com o id enviado.
+
+Não existe: exclusão no performance-service (avaliações, PDI, OKRs, histórico e cadastro de colaboradores), recibo de conclusão, limpeza da outbox e dos backups, exportação por titular, texto de consentimento e base legal (conteúdo jurídico do autor). Não há afirmação de conformidade neste repositório.
+
 ## Próximos passos
 
 O que de fato falta (o resto está nas tabelas acima):
 
 1. **Hierarquia de gestão** (decisão do autor, ADR 0014): hoje o papel `manager` vale para o tenant inteiro, em OKRs e no restante do performance-service.
 2. **performance-service consumindo eventos:** `TenantCriado` e `TitularExclusaoSolicitada` (exclusão de titular ainda não chega ao desempenho, nem aos dados de PDI, avaliações e OKRs).
-3. **Confirmação da exclusão de titular:** hoje o pedido é registrado e o evento publicado, mas cada serviço apaga sem devolver recibo; falta um registro de conclusão por serviço e a limpeza das linhas antigas da outbox (job de retenção).
+3. **Exclusão de titular, o que falta:** recibo de conclusão por serviço (hoje cada serviço apaga sem devolver confirmação, então ninguém sabe se terminou); limpeza das linhas da outbox, que ainda carregam ids de pessoas (job de retenção); backups do Postgres, que retêm o dado apagado até expirarem; e o vínculo candidato ↔ colaborador, sem o qual um pedido apaga só o id enviado e as duas identidades exigem dois pedidos.
 4. **Diretório de pessoas** (`people-directory`): produtor real de `ColaboradorAtualizado` e `ColaboradorDesligado`, e o vínculo candidatura → colaborador que dispensa o passo manual do onboarding (ADR 0012).
 5. **Keycloak:** validar o provisionador contra um Keycloak real (a permissão do service account é hipótese, ADR 0013), associar usuários e domínios de e-mail à Organization.
 6. **Front-end:** configurador de tema com prévia de contraste; as telas novas ainda não foram exercitadas contra os serviços de pé.

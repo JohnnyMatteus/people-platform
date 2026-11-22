@@ -8,7 +8,7 @@ Aprendizagem (LXM): trilhas, matrículas, progresso, sugestão do próximo conte
 - **Matrículas:** a própria pessoa se matricula, ou o `tenant-admin` matricula outra. Concluir um conteúdo é idempotente e só vale para a matrícula da própria pessoa (a de outra responde 404).
 - **Sugestões:** o próximo conteúdo de cada matrícula em andamento (integração, depois atribuição da empresa, depois escolha da pessoa) e, com `competency`, conteúdos de trilhas em que a pessoa ainda não está e que desenvolvem aquela competência. É regra, não modelo.
 - **Integração de contratados:** `CandidatoContratado` cria uma atribuição *pendente* (o evento traz a candidatura, não o colaborador). O `tenant-admin` informa quem é a pessoa (`POST /v1/onboarding/{applicationId}/bind`) e ela é matriculada na trilha de integração do tenant.
-- **LGPD:** `TitularExclusaoSolicitada` apaga matrículas, progresso e atribuições vinculadas ao titular no tenant do evento.
+- **LGPD (parcial):** `TitularExclusaoSolicitada` apaga matrículas, progresso e atribuições vinculadas ao titular no tenant do evento, pela função `erase_subject` (`SECURITY DEFINER`, presa ao tenant da sessão; o papel da aplicação não tem `DELETE`), e grava uma lápide (`erased_subjects`) que recusa matrícula ou vínculo posteriores. `subject_id` é o colaborador (`employee_id`, o `sub` do token); este serviço não guarda candidatos. Não há recibo de conclusão e a outbox e os backups do banco não são tratados.
 
 Contrato HTTP: [`contracts/openapi/learning-service.yaml`](../../contracts/openapi/learning-service.yaml), por `http://localhost:8000/learning` no gateway.
 

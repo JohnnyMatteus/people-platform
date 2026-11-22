@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL   string // usuário da aplicação, sujeito a RLS
 	KafkaBrokers  []string
 	RecruitTopic  string
+	PrivacyTopic  string
 	ConsumerGroup string
 	OIDCIssuer    string
 	OIDCAudience  string
@@ -25,6 +26,7 @@ func Load() (Config, error) {
 		DatabaseURL:   os.Getenv("DATABASE_URL"),
 		KafkaBrokers:  splitNonEmpty(os.Getenv("KAFKA_BROKERS")),
 		RecruitTopic:  env("RECRUITMENT_EVENTS_TOPIC", "people.recruitment.events.v1"),
+		PrivacyTopic:  env("PRIVACY_EVENTS_TOPIC", "people.privacy.events.v1"),
 		ConsumerGroup: env("KAFKA_CONSUMER_GROUP", "learning-service"),
 		OIDCIssuer:    os.Getenv("OIDC_ISSUER"),
 		OIDCAudience:  env("OIDC_AUDIENCE", "people-api"),

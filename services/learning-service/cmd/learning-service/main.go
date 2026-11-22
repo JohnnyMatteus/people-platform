@@ -113,7 +113,7 @@ func serve(ctx context.Context, logger *slog.Logger) error {
 	defer pool.Close()
 
 	svc := app.NewService(postgres.NewStore(pool), time.Now, newUUIDv7)
-	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.RecruitTopic, cfg.ConsumerGroup, svc, logger)
+	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, []string{cfg.RecruitTopic, cfg.PrivacyTopic}, cfg.ConsumerGroup, svc, logger)
 	if err != nil {
 		return err
 	}

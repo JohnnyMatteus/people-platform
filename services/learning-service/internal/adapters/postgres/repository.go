@@ -141,6 +141,11 @@ func (r enrollmentRepo) query(ctx context.Context, where string, args ...any) ([
 	return list, prows.Err()
 }
 
+func (r enrollmentRepo) DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error) {
+	tag, err := r.t.tx.Exec(ctx, `DELETE FROM enrollments WHERE employee_id = $1`, employeeID)
+	return int(tag.RowsAffected()), err
+}
+
 func (r enrollmentRepo) MarkCompleted(ctx context.Context, enrollmentID, itemID uuid.UUID, at time.Time) error {
 	_, err := r.t.tx.Exec(ctx, `INSERT INTO enrollment_progress (enrollment_id, item_id, tenant_id, completed_at)
 		VALUES ($1,$2,$3,$4) ON CONFLICT (enrollment_id, item_id) DO NOTHING`, enrollmentID, itemID, r.t.tenant, at)
@@ -195,6 +200,11 @@ func (r onboardingRepo) Bind(ctx context.Context, a domain.OnboardingAssignment)
 		return domain.ErrConflict
 	}
 	return err
+}
+
+func (r onboardingRepo) DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error) {
+	tag, err := r.t.tx.Exec(ctx, `DELETE FROM onboarding_assignments WHERE employee_id = $1`, employeeID)
+	return int(tag.RowsAffected()), err
 }
 
 type settingsRepo struct{ t *txn }

@@ -120,6 +120,20 @@ func (r enrollments) ListFor(_ context.Context, employeeID uuid.UUID) ([]domain.
 	return out, nil
 }
 
+func (r enrollments) DeleteForEmployee(_ context.Context, employeeID uuid.UUID) (int, error) {
+	kept := r.t.s.enrollments[:0]
+	removed := 0
+	for _, e := range r.t.s.enrollments {
+		if e.TenantID == r.t.tenant && e.EmployeeID == employeeID {
+			removed++
+			continue
+		}
+		kept = append(kept, e)
+	}
+	r.t.s.enrollments = kept
+	return removed, nil
+}
+
 func (r enrollments) MarkCompleted(_ context.Context, enrollmentID, itemID uuid.UUID, at time.Time) error {
 	for i, e := range r.t.s.enrollments {
 		if e.ID == enrollmentID && e.TenantID == r.t.tenant {
@@ -178,6 +192,20 @@ func (r onboarding) Bind(_ context.Context, a domain.OnboardingAssignment) error
 		}
 	}
 	return domain.ErrNotFound
+}
+
+func (r onboarding) DeleteForEmployee(_ context.Context, employeeID uuid.UUID) (int, error) {
+	kept := r.t.s.onboarding[:0]
+	removed := 0
+	for _, a := range r.t.s.onboarding {
+		if a.TenantID == r.t.tenant && a.EmployeeID != nil && *a.EmployeeID == employeeID {
+			removed++
+			continue
+		}
+		kept = append(kept, a)
+	}
+	r.t.s.onboarding = kept
+	return removed, nil
 }
 
 type settings struct{ t *tx }

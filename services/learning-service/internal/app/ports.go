@@ -36,6 +36,8 @@ type EnrollmentRepository interface {
 	Insert(ctx context.Context, e domain.Enrollment) error
 	Get(ctx context.Context, id uuid.UUID) (domain.Enrollment, error)
 	ListFor(ctx context.Context, employeeID uuid.UUID) ([]domain.Enrollment, error)
+	// DeleteForEmployee apaga as matrículas da pessoa e, em cascata, o progresso. Devolve quantas apagou.
+	DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error)
 	// MarkCompleted é idempotente: concluir duas vezes mantém a primeira data.
 	MarkCompleted(ctx context.Context, enrollmentID, itemID uuid.UUID, at time.Time) error
 }
@@ -46,6 +48,8 @@ type OnboardingRepository interface {
 	Get(ctx context.Context, applicationID uuid.UUID) (domain.OnboardingAssignment, error)
 	ListPending(ctx context.Context) ([]domain.OnboardingAssignment, error)
 	Bind(ctx context.Context, a domain.OnboardingAssignment) error
+	// DeleteForEmployee apaga as atribuições já vinculadas à pessoa. Devolve quantas apagou.
+	DeleteForEmployee(ctx context.Context, employeeID uuid.UUID) (int, error)
 }
 
 type SettingsRepository interface {

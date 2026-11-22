@@ -57,6 +57,22 @@ class OutboxRelayTest extends TestCase
         $this->assertSame(3, $publicada->attempts);
     }
 
+    public function test_tenant_travado_com_mais_pendentes_que_o_lote_nao_impede_os_outros_de_publicar(): void
+    {
+        $envenenada = $this->enqueue(self::A, '2026-11-22 09:00:00');
+        for ($i = 1; $i <= 6; $i++) {
+            $this->enqueue(self::A, sprintf('2026-11-22 09:00:%02d', $i));
+        }
+        $deB = [$this->enqueue(self::B, '2026-11-22 11:00:00'), $this->enqueue(self::B, '2026-11-22 11:00:01')];
+        $publisher = $this->publisher(failFor: [$envenenada]);
+
+        $result = (new OutboxRelay(app(TenantTransaction::class), $publisher))->drain(3);
+
+        $this->assertSame(2, $result->published);
+        $this->assertSame(1, $result->failed);
+        $this->assertSame($deB, $publisher->sent, 'o lote de 3 é mais curto que a fila de A, e B publicou mesmo assim');
+    }
+
     private function enqueue(string $tenant, string $occurredAt): string
     {
         return OutboxMessage::create([

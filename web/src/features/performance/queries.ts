@@ -41,14 +41,6 @@ export function useProgress(cycleId: Ref<string | undefined>, enabled: Ref<boole
   })
 }
 
-export function useEmployeeEvaluations(cycleId: Ref<string | undefined>, employeeId: Ref<string | undefined>) {
-  return useQuery({
-    queryKey: computed(() => ['evaluations', cycleId.value, employeeId.value]),
-    queryFn: () => get(s.evaluationList, `${base}/cycles/${cycleId.value}/employees/${employeeId.value}/evaluations`),
-    enabled: computed(() => !!cycleId.value && !!employeeId.value),
-  })
-}
-
 export const useSuccessionPlans = () =>
   useQuery({ queryKey: ['succession'], queryFn: () => get(s.successionPlans, `${base}/critical-positions`) })
 

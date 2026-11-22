@@ -1,0 +1,12 @@
+# O restante (datasource, flyway) é injetado por IntegrationTestBase.
+spring:
+  kafka:
+    bootstrap-servers: localhost:1
+performance:
+  security:
+    issuer: http://localhost:8180/realms/people
+    jwks-uri: http://localhost:1/jwks
+    audience: people-api
+  outbox:
+    relay:
+      enabled: false

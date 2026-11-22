@@ -216,3 +216,25 @@ func TestHTTP_HealthAndMetrics(t *testing.T) {
 		t.Fatalf("métrica por rota ausente:\n%s", raw)
 	}
 }
+
+func TestHTTP_DataSubjectErasure(t *testing.T) {
+	e := newEnv(t)
+	id := e.createTenant(t, "construtora-horizonte", "corporativo")
+	other := e.createTenant(t, "rede-varejo-sol", "corporativo")
+	e.verifier["adm-a"] = app.Principal{Subject: "adm-a", TenantID: uuid.MustParse(id), Roles: []string{app.RoleTenantAdmin}}
+	body := map[string]string{"subject_id": uuid.NewString()}
+
+	status, out := e.do(t, http.MethodPost, "/v1/tenants/"+id+"/data-subject-erasures", "adm-a", body)
+	if status != http.StatusAccepted || out["request_id"] == nil {
+		t.Fatalf("pedido do admin do próprio tenant: %d %v", status, out)
+	}
+	if status, _ := e.do(t, http.MethodPost, "/v1/tenants/"+other+"/data-subject-erasures", "adm-a", body); status != http.StatusNotFound {
+		t.Fatalf("admin pedindo no tenant alheio = %d", status)
+	}
+	if status, _ := e.do(t, http.MethodPost, "/v1/tenants/"+id+"/data-subject-erasures", "", body); status != http.StatusUnauthorized {
+		t.Fatalf("sem token = %d", status)
+	}
+	if status, _ := e.do(t, http.MethodPost, "/v1/tenants/"+id+"/data-subject-erasures", "adm-a", map[string]string{"subject_id": "nao-uuid"}); status != http.StatusBadRequest {
+		t.Fatalf("subject_id malformado = %d", status)
+	}
+}

@@ -10,6 +10,8 @@ import (
 const (
 	EventTenantCreated     = "TenantCriado"
 	EventTenantPlanChanged = "TenantPlanoAlterado"
+	// EventDataSubjectErasureRequested vai ao tópico de privacidade, não ao de tenants.
+	EventDataSubjectErasureRequested = "TitularExclusaoSolicitada"
 	// EventSchemaVersion é a versão do envelope e do payload; mudanças incompatíveis criam v2.
 	EventSchemaVersion = 1
 )
@@ -56,5 +58,29 @@ func NewTenantPlanChangedEvent(id uuid.UUID, before, after Tenant, features []Fe
 		ID: id, Type: EventTenantPlanChanged, Version: EventSchemaVersion,
 		TenantID: after.ID, AggregateID: after.ID, OccurredAt: after.UpdatedAt,
 		Data: TenantPlanChangedData{PreviousPlan: before.Plan, Plan: after.Plan, Features: features},
+	}
+}
+
+// ErasureRequestedData é o payload de TitularExclusaoSolicitada: só identificadores, nunca dado pessoal.
+type ErasureRequestedData struct {
+	RequestID uuid.UUID `json:"request_id"`
+	SubjectID uuid.UUID `json:"subject_id"`
+}
+
+// ErasureRequest é o registro do pedido de exclusão, guardado no tenant-service fora do barramento.
+type ErasureRequest struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	SubjectID   uuid.UUID
+	RequestedBy string // sub do token de quem pediu
+	RequestedAt time.Time
+}
+
+// NewErasureRequestedEvent monta o evento que cada serviço consome para apagar os dados do titular.
+func NewErasureRequestedEvent(eventID uuid.UUID, r ErasureRequest) Event {
+	return Event{
+		ID: eventID, Type: EventDataSubjectErasureRequested, Version: EventSchemaVersion,
+		TenantID: r.TenantID, AggregateID: r.SubjectID, OccurredAt: r.RequestedAt,
+		Data: ErasureRequestedData{RequestID: r.ID, SubjectID: r.SubjectID},
 	}
 }

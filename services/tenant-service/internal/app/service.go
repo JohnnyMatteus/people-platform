@@ -40,6 +40,26 @@ func (s *Service) CreateTenant(ctx context.Context, p Principal, in domain.NewTe
 	return t, nil
 }
 
+// RequestErasure registra o pedido de exclusão de um titular neste tenant e publica TitularExclusaoSolicitada, que
+// cada serviço consome para apagar o que guarda sobre a pessoa. Só o admin do próprio tenant (ou o operador da
+// plataforma). Devolve o id do pedido. A exclusão nos outros serviços é assíncrona e não há confirmação de volta.
+func (s *Service) RequestErasure(ctx context.Context, p Principal, tenantID, subjectID uuid.UUID) (uuid.UUID, error) {
+	if !p.CanManage(tenantID) {
+		return uuid.Nil, domain.ErrNotFound // não revela quais tenants existem
+	}
+	if subjectID == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("%w: subject_id obrigatório", domain.ErrInvalidInput)
+	}
+	if _, err := s.repo.GetTenant(ctx, tenantID); err != nil {
+		return uuid.Nil, err
+	}
+	req := domain.ErasureRequest{ID: s.newID(), TenantID: tenantID, SubjectID: subjectID, RequestedBy: p.Subject, RequestedAt: s.now()}
+	if err := s.repo.RequestErasure(ctx, req, domain.NewErasureRequestedEvent(s.newID(), req)); err != nil {
+		return uuid.Nil, fmt.Errorf("registrar pedido de exclusão: %w", err)
+	}
+	return req.ID, nil
+}
+
 // ListTenants lista todos os tenants. Só o operador da plataforma.
 func (s *Service) ListTenants(ctx context.Context, p Principal) ([]domain.Tenant, error) {
 	if !p.IsPlatformAdmin() {

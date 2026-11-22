@@ -247,3 +247,44 @@ func TestCreateLogoUpload(t *testing.T) {
 		t.Fatalf("admin de outro tenant: %v", err)
 	}
 }
+
+func TestRequestErasure_RecordsRequestAndEventForThePathTenantOnly(t *testing.T) {
+	ctx := context.Background()
+	s, repo := newTestService(t)
+	a := mustCreate(t, s, "construtora-horizonte", domain.PlanGrowth)
+	b := mustCreate(t, s, "rede-varejo-sol", domain.PlanGrowth)
+	subject := uuid.New()
+
+	requestID, err := s.RequestErasure(ctx, adminOf(a.ID), a.ID, subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqs := repo.ErasureRequests()
+	if len(reqs) != 1 || reqs[0].ID != requestID || reqs[0].SubjectID != subject || reqs[0].TenantID != a.ID || reqs[0].RequestedBy != "adm" {
+		t.Fatalf("pedido registrado: %+v", reqs)
+	}
+	events := repo.Events()
+	evt := events[len(events)-1]
+	data, _ := evt.Data.(domain.ErasureRequestedData)
+	if evt.Type != domain.EventDataSubjectErasureRequested || evt.TenantID != a.ID || data.SubjectID != subject || data.RequestID != requestID {
+		t.Fatalf("evento: %+v", evt)
+	}
+
+	// Admin de outro tenant e colaborador comum não alcançam o tenant A (404, sem revelar que existe).
+	if _, err := s.RequestErasure(ctx, adminOf(b.ID), a.ID, subject); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("admin do tenant B pedindo exclusão no A: %v", err)
+	}
+	employee := app.Principal{Subject: "emp", TenantID: a.ID, Roles: []string{"employee"}}
+	if _, err := s.RequestErasure(ctx, employee, a.ID, subject); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("colaborador pedindo exclusão: %v", err)
+	}
+	if _, err := s.RequestErasure(ctx, adminOf(a.ID), a.ID, uuid.Nil); !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("subject nulo: %v", err)
+	}
+	if _, err := s.RequestErasure(ctx, operator, uuid.New(), subject); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("tenant inexistente: %v", err)
+	}
+	if len(repo.ErasureRequests()) != 1 {
+		t.Fatalf("só o pedido válido pode ser registrado, há %d", len(repo.ErasureRequests()))
+	}
+}

@@ -100,6 +100,17 @@ func (r *Repository) UpdateTenant(ctx context.Context, t domain.Tenant, evt *dom
 	}))
 }
 
+// RequestErasure grava o pedido e o evento na mesma transação, no escopo do tenant: se a outbox falha, o pedido não existe.
+func (r *Repository) RequestErasure(ctx context.Context, req domain.ErasureRequest, evt domain.Event) error {
+	return translate(inTenant(ctx, r.pool, req.TenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO erasure_requests (id, tenant_id, subject_id, requested_by, requested_at)
+				VALUES ($1,$2,$3,$4,$5)`, req.ID, req.TenantID, req.SubjectID, req.RequestedBy, req.RequestedAt); err != nil {
+			return err
+		}
+		return insertOutbox(ctx, tx, evt)
+	}))
+}
+
 // GetTheme devolve o tema gravado; ok=false quando o tenant ainda não definiu um.
 func (r *Repository) GetTheme(ctx context.Context, tenantID uuid.UUID) (domain.Theme, bool, error) {
 	var theme domain.Theme

@@ -22,6 +22,9 @@ type Repository interface {
 	// UpdateTenant grava a alteração e, se evt não for nil, o evento na mesma transação.
 	UpdateTenant(ctx context.Context, t domain.Tenant, evt *domain.Event) error
 
+	// RequestErasure grava o pedido de exclusão e o evento na outbox na mesma transação, no escopo do tenant.
+	RequestErasure(ctx context.Context, req domain.ErasureRequest, evt domain.Event) error
+
 	GetTheme(ctx context.Context, tenantID uuid.UUID) (domain.Theme, bool, error)
 	SaveTheme(ctx context.Context, tenantID uuid.UUID, theme domain.Theme) error
 

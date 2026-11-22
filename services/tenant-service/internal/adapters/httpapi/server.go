@@ -62,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/tenants/{id}/theme", s.authenticated(s.getTheme))
 	mux.HandleFunc("PUT /v1/tenants/{id}/theme", s.authenticated(s.putTheme))
 	mux.HandleFunc("POST /v1/tenants/{id}/theme/logo-upload", s.authenticated(s.createLogoUpload))
+	mux.HandleFunc("POST /v1/tenants/{id}/data-subject-erasures", s.authenticated(s.requestErasure))
 	mux.HandleFunc("GET /v1/tenants/{id}/domains", s.authenticated(s.listDomains))
 	mux.HandleFunc("POST /v1/tenants/{id}/domains", s.authenticated(s.addDomain))
 
@@ -200,6 +201,23 @@ func (s *Server) deleteTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) requestErasure(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err == nil {
+		var in struct {
+			SubjectID uuid.UUID `json:"subject_id"`
+		}
+		if err = decode(r, &in); err == nil {
+			var requestID uuid.UUID
+			if requestID, err = s.svc.RequestErasure(r.Context(), principalFrom(r.Context()), id, in.SubjectID); err == nil {
+				writeJSON(w, http.StatusAccepted, map[string]uuid.UUID{"request_id": requestID})
+				return
+			}
+		}
+	}
+	writeError(w, r, s.logger, err)
 }
 
 func (s *Server) getFeatures(w http.ResponseWriter, r *http.Request) {

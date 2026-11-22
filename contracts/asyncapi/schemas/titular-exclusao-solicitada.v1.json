@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://people-platform.example.com/schemas/titular-exclusao-solicitada.v1.json",
+  "title": "TitularExclusaoSolicitada v1",
+  "description": "Um titular de dados pediu a exclusão. Cada serviço apaga ou anonimiza o que guarda sobre ele neste tenant. subject_id é o identificador da pessoa nos serviços (colaborador ou candidato); não carrega nome, e-mail nem o motivo jurídico, que ficam no registro do pedido fora do barramento.",
+  "allOf": [{ "$ref": "envelope.v1.json" }],
+  "type": "object",
+  "properties": {
+    "event_type": { "const": "TitularExclusaoSolicitada" },
+    "event_version": { "const": 1 },
+    "producer": { "const": "tenant-service" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "subject_id"],
+      "properties": {
+        "request_id": { "type": "string", "format": "uuid", "description": "Identificador do pedido, para rastrear a exclusão em cada serviço." },
+        "subject_id": { "type": "string", "format": "uuid", "description": "A pessoa a excluir: colaborador (sub do token) ou candidato." }
+      }
+    }
+  }
+}

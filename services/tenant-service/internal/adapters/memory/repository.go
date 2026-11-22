@@ -21,6 +21,7 @@ type Repository struct {
 	overrides map[uuid.UUID]map[domain.Feature]bool
 	domains   map[string]uuid.UUID
 	outbox    []domain.Event
+	erasures  []domain.ErasureRequest
 }
 
 var _ app.Repository = (*Repository)(nil)
@@ -147,6 +148,21 @@ func (r *Repository) ResolveHost(_ context.Context, host string) (uuid.UUID, err
 		return uuid.Nil, domain.ErrNotFound
 	}
 	return id, nil
+}
+
+func (r *Repository) RequestErasure(_ context.Context, req domain.ErasureRequest, evt domain.Event) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.erasures = append(r.erasures, req)
+	r.outbox = append(r.outbox, evt)
+	return nil
+}
+
+// ErasureRequests devolve uma cópia dos pedidos de exclusão registrados.
+func (r *Repository) ErasureRequests() []domain.ErasureRequest {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]domain.ErasureRequest(nil), r.erasures...)
 }
 
 // Events devolve uma cópia dos eventos gravados na "outbox" em memória.

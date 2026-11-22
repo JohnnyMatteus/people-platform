@@ -107,7 +107,10 @@ export async function awardAndBadge(
   now: Date,
   newId: () => string,
 ): Promise<void> {
-  const fresh = await tx.points.award(entries, sourceEventId, now, newId);
+  // Titular com lápide não volta a ter pontos: um elogio ou uma leitura que chegue depois do pedido não recria o dado.
+  const eligible: PointEntry[] = [];
+  for (const e of entries) if (!(await tx.privacy.isErased(e.employeeId))) eligible.push(e);
+  const fresh = await tx.points.award(eligible, sourceEventId, now, newId);
   for (const id of new Set(fresh.map((e) => e.employeeId))) {
     const has = (await tx.points.badges(id)).map((b) => b.code);
     for (const code of badgesEarned(await tx.points.stats(id), has)) await tx.points.addBadge(id, code, now);

@@ -27,6 +27,7 @@ export class MemoryStore implements Store {
   outbox: OutboxEvent[] = [];
   settings: TenantSettings[] = [];
   processed: { tenantId: string; eventId: string }[] = [];
+  erased: { tenantId: string; subjectId: string }[] = [];
 
   async inTenant<T>(t: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
     const mine = <R extends { tenantId: string }>(rows: R[]) => rows.filter((r) => r.tenantId === t);
@@ -113,7 +114,9 @@ export class MemoryStore implements Store {
         upsert: async (x) => void (s.settings = [...s.settings.filter((y) => y.tenantId !== t), x]),
       },
       privacy: {
+        isErased: async (id) => mine(s.erased).some((x) => x.subjectId === id),
         eraseSubject: async (id) => {
+          if (!mine(s.erased).some((x) => x.subjectId === id)) s.erased.push({ tenantId: t, subjectId: id });
           const before = [s.feedbacks, s.praises, s.meetings, s.participation, s.ledger, s.badges, s.posts, s.receipts].reduce(
             (n, rows) => n + mine(rows as { tenantId: string }[]).length,
             0,

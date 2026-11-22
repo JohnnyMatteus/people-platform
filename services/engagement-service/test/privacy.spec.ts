@@ -94,3 +94,31 @@ describe('exclusão de titular (LGPD)', () => {
     expect(store.responses).toHaveLength(1);
   });
 });
+
+describe('lápide: o dado que chega depois do pedido não ressuscita o titular', () => {
+  it('pontos de elogio e de leitura são ignorados para quem já foi apagado, e só para ele', async () => {
+    const store = new MemoryStore();
+    const d = depsFor(store);
+    const social = new SocialService(d);
+    const gamification = new GamificationService(d);
+
+    // A exclusão da Carla chega antes de qualquer dado dela.
+    await new PrivacyService(d).onErasureRequested(erasure(TENANT_A, CARLA));
+    await social.praise(principal(ANA), [BRUNO, CARLA], 'parabéns aos dois', []);
+    for (const e of store.outbox.filter((o) => o.eventType === 'ElogioPublicado')) {
+      await gamification.onPraisePublished({ event_id: e.id, event_type: 'ElogioPublicado', tenant_id: e.tenantId, data: e.payload as never });
+    }
+    const post = await social.publishPost(principal(ANA, TENANT_A, ['manager']), 'Aviso', 'texto');
+    await social.confirmRead(principal(CARLA), post.id);
+
+    expect(store.ledger.filter((l) => l.employeeId === CARLA)).toEqual([]);
+    expect(store.badges.filter((b) => b.employeeId === CARLA)).toEqual([]);
+    expect(store.ledger.filter((l) => l.employeeId === BRUNO).length).toBeGreaterThan(0);
+    // A lápide vale só no tenant do pedido: a mesma pessoa no tenant B continua pontuando.
+    await social.praise(principal(ANA, TENANT_B), [CARLA], 'oi', []);
+    for (const e of store.outbox.filter((o) => o.eventType === 'ElogioPublicado' && o.tenantId === TENANT_B)) {
+      await gamification.onPraisePublished({ event_id: e.id, event_type: 'ElogioPublicado', tenant_id: e.tenantId, data: e.payload as never });
+    }
+    expect(store.ledger.filter((l) => l.tenantId === TENANT_B && l.employeeId === CARLA).length).toBeGreaterThan(0);
+  });
+});

@@ -35,4 +35,6 @@ create_service_db engagement_service engagement_service_owner "$ENGAGEMENT_DB_OW
   engagement_service_app "$ENGAGEMENT_DB_APP_PASSWORD" engagement_app
 create_service_db analytics_service analytics_service_owner "$ANALYTICS_DB_OWNER_PASSWORD" \
   analytics_service_app "$ANALYTICS_DB_APP_PASSWORD" analytics_app
+create_service_db learning_service learning_service_owner "$LEARNING_DB_OWNER_PASSWORD" \
+  learning_service_app "$LEARNING_DB_APP_PASSWORD" learning_app
 create_service_db keycloak keycloak "$KEYCLOAK_DB_PASSWORD" keycloak_app "$KEYCLOAK_DB_PASSWORD" keycloak_app_role

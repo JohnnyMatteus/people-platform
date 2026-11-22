@@ -6,6 +6,7 @@
 #   recruitment-service  o ATS (PHP + Laravel), o job de migração e o relay da outbox
 #   engagement-service  o serviço NestJS e o job de migração dele
 #   analytics-ai-service  o serviço Python de analytics e IA
+#   learning-service  trilhas e matrículas (Go), com o job de migração e o consumidor de CandidatoContratado
 #   web             o front-end Vue (nginx), em http://localhost:5173, falando com o gateway por /api
 # Uso: make up (core), make up-all (core + observability + tools + serviços). Senhas são só de dev.
 name: people-platform
@@ -34,6 +35,8 @@ services:
       ENGAGEMENT_DB_APP_PASSWORD: ${ENGAGEMENT_DB_APP_PASSWORD:-dev-only-change-me}
       ANALYTICS_DB_OWNER_PASSWORD: ${ANALYTICS_DB_OWNER_PASSWORD:-dev-only-change-me}
       ANALYTICS_DB_APP_PASSWORD: ${ANALYTICS_DB_APP_PASSWORD:-dev-only-change-me}
+      LEARNING_DB_OWNER_PASSWORD: ${LEARNING_DB_OWNER_PASSWORD:-dev-only-change-me}
+      LEARNING_DB_APP_PASSWORD: ${LEARNING_DB_APP_PASSWORD:-dev-only-change-me}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-dev-only-change-me}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -365,6 +368,48 @@ services:
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/actuator/health/readiness"]
+    networks: [people-platform-net]
+
+  # ------------------------------------------------- learning-service (perfil learning-service)
+  learning-service-migrate:
+    build:
+      context: ./services/learning-service
+    image: people-platform/learning-service:dev
+    profiles: [learning-service]
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_MIGRATION_URL: postgres://learning_service_owner:${LEARNING_DB_OWNER_PASSWORD:-dev-only-change-me}@postgres:5432/learning_service?sslmode=disable
+    restart: "no"
+    networks: [people-platform-net]
+
+  learning-service:
+    image: people-platform/learning-service:dev
+    profiles: [learning-service]
+    command: ["serve"]
+    depends_on:
+      learning-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://learning_service_app:${LEARNING_DB_APP_PASSWORD:-dev-only-change-me}@postgres:5432/learning_service?sslmode=disable
+      KAFKA_BROKERS: kafka:9092
+      OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
+      OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs
+      OIDC_AUDIENCE: people-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: learning-service
+    ports:
+      - "${LEARNING_SERVICE_PORT:-8086}:8080"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "/learning-service", "healthcheck"]
     networks: [people-platform-net]
 
   # ---------------------------------------------------------------- web (perfil web)

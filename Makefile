@@ -10,7 +10,7 @@ ifeq ($(PORTFOLIO),1)
 COMPOSE        += -f docker-compose.yml -f docker-compose.portfolio.yml
 endif
 PROFILES_CORE  := --profile core
-PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service --profile web
+PROFILES_ALL   := --profile core --profile observability --profile tools --profile tenant-service --profile recruitment-service --profile engagement-service --profile performance-service --profile analytics-ai-service --profile learning-service --profile web
 
 GRADLE_IMAGE   := gradle:8.14.3-jdk21
 # Monta a raiz do repositório: os testes do serviço leem contracts/ (../../contracts).
@@ -59,11 +59,11 @@ network: ## Cria a rede externa compartilhada portfolio-net (opcional)
 	docker network inspect portfolio-net >/dev/null 2>&1 || docker network create portfolio-net
 
 # ------------------------------------------------------------------ qualidade
-lint: contracts-lint tenant-service-lint performance-service-lint engagement-service-lint ## Lint de contratos e de todos os serviços
+lint: contracts-lint tenant-service-lint performance-service-lint engagement-service-lint learning-service-lint ## Lint de contratos e de todos os serviços
 
-test: tenant-service-test-unit performance-service-test engagement-service-test-unit ## Testes unitários de todos os serviços (sem Docker no Go)
+test: tenant-service-test-unit performance-service-test engagement-service-test-unit learning-service-test-unit ## Testes unitários de todos os serviços (sem Docker no Go)
 
-test-integration: tenant-service-test engagement-service-test ## Testes com infraestrutura real (Postgres via testcontainers)
+test-integration: tenant-service-test engagement-service-test learning-service-test ## Testes com infraestrutura real (Postgres via testcontainers)
 
 contracts-lint: ## Valida OpenAPI e AsyncAPI com Spectral
 	$(SPECTRAL) lint "contracts/openapi/*.yaml" "contracts/asyncapi/*.yaml" --fail-severity=warn
@@ -134,6 +134,23 @@ analytics-ai-service-test: ## Testes unitários (LLM falso, sem rede)
 
 analytics-ai-service-up: ## Sobe o núcleo e o analytics-ai-service
 	$(COMPOSE) $(PROFILES_CORE) --profile analytics-ai-service up -d --build --wait
+
+# --------------------------------------------------- learning-service
+.PHONY: learning-service-lint learning-service-test learning-service-test-unit learning-service-build learning-service-up
+learning-service-lint: ## gofmt + go vet
+	$(MAKE) -C services/learning-service lint
+
+learning-service-test: ## Testes, incluindo Postgres real (testcontainers)
+	$(MAKE) -C services/learning-service test
+
+learning-service-test-unit: ## Testes sem Docker (-short)
+	$(MAKE) -C services/learning-service test-unit
+
+learning-service-build: ## Compila o binário
+	$(MAKE) -C services/learning-service build
+
+learning-service-up: ## Sobe o núcleo e o learning-service (porta 8086)
+	$(COMPOSE) $(PROFILES_CORE) --profile learning-service up -d --build --wait
 
 # --------------------------------------------------- web
 .PHONY: web-lint web-test web-up

@@ -11,6 +11,8 @@ use App\Infrastructure\Auth\JwtVerifier;
 use App\Infrastructure\Auth\KeySetProvider;
 use App\Infrastructure\Messaging\DatabaseOutbox;
 use App\Infrastructure\Messaging\KafkaEventPublisher;
+use App\Infrastructure\Messaging\KafkaTenantEventConsumer;
+use App\Infrastructure\Messaging\TenantEventHandler;
 use App\Infrastructure\Storage\S3ResumeStorage;
 use App\Infrastructure\Tenancy\TenantContext;
 use Aws\S3\S3Client;
@@ -50,6 +52,13 @@ class AppServiceProvider extends ServiceProvider
                 $s3['upload_ttl_minutes'],
             );
         });
+
+        $this->app->bind(KafkaTenantEventConsumer::class, fn ($app) => new KafkaTenantEventConsumer(
+            config('recruitment.kafka.brokers'),
+            config('recruitment.kafka.tenant_topic'),
+            config('recruitment.kafka.group_id'),
+            $app->make(TenantEventHandler::class),
+        ));
 
         $this->app->bind(EventPublisher::class, fn () => new KafkaEventPublisher(
             config('recruitment.kafka.brokers'),

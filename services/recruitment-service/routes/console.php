@@ -1,6 +1,7 @@
 <?php
 
 use App\Application\OutboxRelay;
+use App\Infrastructure\Messaging\KafkaTenantEventConsumer;
 use Illuminate\Support\Facades\Artisan;
 
 Artisan::command('outbox:relay {--once : Esvazia a outbox uma vez e sai}', function (OutboxRelay $relay) {
@@ -19,3 +20,7 @@ Artisan::command('outbox:relay {--once : Esvazia a outbox uma vez e sai}', funct
         }
     } while (true);
 })->purpose('Publica no Kafka os eventos pendentes da outbox');
+
+Artisan::command('tenant-events:consume', function (KafkaTenantEventConsumer $consumer) {
+    $consumer->run();
+})->purpose('Consome TenantCriado do Kafka e prepara os dados do tenant');

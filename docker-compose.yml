@@ -293,6 +293,20 @@ services:
         condition: service_completed_successfully
     environment: *recruitment-env
     restart: unless-stopped
+
+  # Consome TenantCriado (people.tenant.events.v1) e prepara pipeline e configurações do tenant.
+  recruitment-service-tenant-consumer:
+    image: people-platform/recruitment-service:dev
+    profiles: [recruitment-service]
+    command: ["php", "artisan", "tenant-events:consume"]
+    depends_on:
+      recruitment-service-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment: *recruitment-env
+    restart: unless-stopped
+
   # ---------------------------------------------------- analytics-ai-service
   analytics-ai-service:
     build:

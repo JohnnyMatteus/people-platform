@@ -89,7 +89,6 @@ export const evaluation = z.object({
   submitted_at: z.string(),
 })
 export type Evaluation = z.infer<typeof evaluation>
-export const evaluationList = z.array(evaluation)
 
 export const progress = z.array(
   z.object({

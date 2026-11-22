@@ -27,8 +27,8 @@ function calls(file: string): string[] {
   const base = /const base = '([^']+)'/.exec(text)?.[1] ?? ''
   const found: string[] = []
   for (const m of text.matchAll(/\b(get|post|put|patch)\(\s*[\w.]+,\s*[`']([^`']+)[`']/g)) {
-    const path = m[2].replace('${base}', base)
-    found.push(`${m[1].toUpperCase()} ${normalize(path)}`)
+    const path = (m[2] ?? '').replace('${base}', base)
+    found.push(`${(m[1] ?? '').toUpperCase()} ${normalize(path)}`)
   }
   return found
 }

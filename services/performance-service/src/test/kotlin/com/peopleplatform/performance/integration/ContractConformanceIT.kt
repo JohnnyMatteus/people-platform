@@ -1,6 +1,7 @@
 package com.peopleplatform.performance.integration
 
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpMethod
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
@@ -9,7 +10,8 @@ import kotlin.test.assertEquals
 
 /** Toda operação do OpenAPI tem handler, e todo handler de /v1 está no OpenAPI. */
 class ContractConformanceIT : IntegrationTestBase() {
-    @Autowired lateinit var mappings: RequestMappingHandlerMapping
+    // O actuator registra um segundo RequestMappingHandlerMapping (controllerEndpointHandlerMapping).
+    @Autowired @Qualifier("requestMappingHandlerMapping") lateinit var mappings: RequestMappingHandlerMapping
 
     private fun implemented(): Set<String> = mappings.handlerMethods.keys.flatMap { info: RequestMappingInfo ->
         val patterns = info.pathPatternsCondition?.patternValues ?: emptySet()

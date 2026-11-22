@@ -39,6 +39,7 @@ import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -148,11 +149,18 @@ private fun PolicyBody.toDomain(caller: com.peopleplatform.performance.app.Calle
     minJustificationLength = minJustificationLength,
 )
 
+// A coluna numeric(6, 2) devolve "3.00" para o que foi gravado como "3"; o contrato (exemplos "1", "2.5", "3.75")
+// usa a forma canônica, sem zeros à direita, e a resposta do PUT e a do GET precisam ser iguais.
+private fun BigDecimal.canonical(): String = stripTrailingZeros().toPlainString()
+
 private fun NineBoxPolicy.toBody() = PolicyBody(
-    scale.min.toPlainString(), scale.max.toPlainString(),
-    AxisBody(performance.mediumFrom.toPlainString(), performance.highFrom.toPlainString()),
-    AxisBody(potential.mediumFrom.toPlainString(), potential.highFrom.toPlainString()),
-    maxStepsPerAxis, topBoxWarningShare.toPlainString(), minJustificationLength,
+    scale.min.canonical(),
+    scale.max.canonical(),
+    AxisBody(performance.mediumFrom.canonical(), performance.highFrom.canonical()),
+    AxisBody(potential.mediumFrom.canonical(), potential.highFrom.canonical()),
+    maxStepsPerAxis,
+    topBoxWarningShare.canonical(),
+    minJustificationLength,
 )
 
 private fun CalibrationAdjustment.toOut() =

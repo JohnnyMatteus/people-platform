@@ -13,8 +13,8 @@ from fastapi import FastAPI
 from analytics_ai.adapters.http.api import Deps, create_app
 from analytics_ai.adapters.http.auth import JwksVerifier
 from analytics_ai.adapters.kafka_consumer import consume
-from analytics_ai.adapters.memory import InMemoryRepository
 from analytics_ai.adapters.openai_llm import OpenAICompatibleClient
+from analytics_ai.adapters.postgres import PostgresRepository
 from analytics_ai.app.ai.budget import InMemoryAiBudget
 from analytics_ai.app.ai.runner import AiRunner
 from analytics_ai.app.ai.service import AiService
@@ -24,7 +24,7 @@ from analytics_ai.config import Settings
 
 
 def build_app(settings: Settings) -> FastAPI:
-    repo = InMemoryRepository()
+    repo = PostgresRepository(settings.database_url)
     llm = OpenAICompatibleClient(
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
@@ -48,6 +48,7 @@ def build_app(settings: Settings) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        await repo.start()
         task = None
         if settings.kafka_brokers:
             task = asyncio.create_task(
@@ -58,9 +59,12 @@ def build_app(settings: Settings) -> FastAPI:
                     ingestor=EventIngestor(repo),
                 )
             )
-        yield
-        if task:
-            task.cancel()
+        try:
+            yield
+        finally:
+            if task:
+                task.cancel()
+            await repo.close()
 
     app.router.lifespan_context = lifespan
     return app

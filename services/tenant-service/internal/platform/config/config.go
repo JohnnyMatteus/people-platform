@@ -26,7 +26,18 @@ type Config struct {
 	AssetsPublicBaseURL string
 	AWSRegion           string
 	LogoUploadTTL       time.Duration
+
+	// Provisionador de identidade (Organization no Keycloak). Desligado quando KeycloakURL está vazia.
+	KeycloakURL              string
+	KeycloakRealm            string
+	KeycloakClientID         string
+	KeycloakClientSecret     string
+	TenantEventsTopic        string
+	ProvisionerConsumerGroup string
 }
+
+// ProvisioningEnabled informa se o serviço consome TenantCriado para criar a Organization no Keycloak.
+func (c Config) ProvisioningEnabled() bool { return c.KeycloakURL != "" }
 
 // Load lê e valida a configuração. Falha cedo se faltar algo obrigatório.
 func Load() (Config, error) {
@@ -41,6 +52,13 @@ func Load() (Config, error) {
 		S3Bucket:          env("S3_ASSETS_BUCKET", "people-platform-tenant-assets"),
 		S3PresignEndpoint: os.Getenv("S3_PRESIGN_ENDPOINT"),
 		AWSRegion:         env("AWS_REGION", "us-east-1"),
+
+		KeycloakURL:              os.Getenv("KEYCLOAK_URL"),
+		KeycloakRealm:            env("KEYCLOAK_REALM", "people"),
+		KeycloakClientID:         env("KEYCLOAK_PROVISIONER_CLIENT_ID", "people-provisioner"),
+		KeycloakClientSecret:     os.Getenv("KEYCLOAK_PROVISIONER_CLIENT_SECRET"),
+		TenantEventsTopic:        env("TENANT_EVENTS_TOPIC", "people.tenant.events.v1"),
+		ProvisionerConsumerGroup: env("KAFKA_PROVISIONER_GROUP", "tenant-service-keycloak-provisioner"),
 	}
 	c.AssetsPublicBaseURL = env("ASSETS_PUBLIC_BASE_URL", fmt.Sprintf("https://%s.s3.%s.amazonaws.com", c.S3Bucket, c.AWSRegion))
 	var err error
@@ -63,6 +81,9 @@ func Load() (Config, error) {
 	}
 	if len(c.KafkaBrokers) == 0 {
 		missing = append(missing, "KAFKA_BROKERS")
+	}
+	if c.ProvisioningEnabled() && c.KeycloakClientSecret == "" {
+		missing = append(missing, "KEYCLOAK_PROVISIONER_CLIENT_SECRET (obrigatória com KEYCLOAK_URL)")
 	}
 	if len(missing) > 0 {
 		return Config{}, fmt.Errorf("variáveis obrigatórias ausentes: %s", strings.Join(missing, ", "))

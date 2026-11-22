@@ -20,12 +20,14 @@ import (
 
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/adapters/httpapi"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/adapters/kafka"
+	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/adapters/keycloak"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/adapters/postgres"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/adapters/s3"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/app"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/platform/auth"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/platform/config"
 	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/platform/telemetry"
+	"github.com/JohnnyMatteus/people-platform/services/tenant-service/internal/provisioning"
 )
 
 const serviceName = "tenant-service"
@@ -133,6 +135,19 @@ func serve(ctx context.Context, logger *slog.Logger) error {
 
 	relay := postgres.NewRelay(pool, publisher, cfg.OutboxBatchSize, metrics, logger)
 	go relay.Run(ctx, cfg.OutboxInterval)
+
+	if cfg.ProvisioningEnabled() {
+		identity := keycloak.New(cfg.KeycloakURL, cfg.KeycloakRealm, cfg.KeycloakClientID, cfg.KeycloakClientSecret,
+			&http.Client{Timeout: 10 * time.Second})
+		provisioner, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.TenantEventsTopic, cfg.ProvisionerConsumerGroup,
+			provisioning.NewHandler(identity), logger)
+		if err != nil {
+			return err
+		}
+		defer provisioner.Close()
+		go provisioner.Run(ctx)
+		logger.Info("provisionador do Keycloak ligado", slog.String("realm", cfg.KeycloakRealm), slog.String("topic", cfg.TenantEventsTopic))
+	}
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

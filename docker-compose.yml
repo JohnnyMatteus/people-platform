@@ -224,6 +224,11 @@ services:
       S3_PRESIGN_ENDPOINT: http://localhost:${LOCALSTACK_PORT:-4566}
       ASSETS_PUBLIC_BASE_URL: http://localhost:${LOCALSTACK_PORT:-4566}/${S3_ASSETS_BUCKET:-people-platform-tenant-assets}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # Provisionador: TenantCriado vira a Organization do tenant no Keycloak (ADR 0013).
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: people
+      KEYCLOAK_PROVISIONER_CLIENT_ID: people-provisioner
+      KEYCLOAK_PROVISIONER_CLIENT_SECRET: ${KEYCLOAK_PROVISIONER_SECRET:-dev-only-change-me}
       OTEL_SERVICE_NAME: tenant-service
     ports:
       - "${TENANT_SERVICE_PORT:-8081}:8080"
@@ -312,18 +317,33 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------- analytics-ai-service
-  analytics-ai-service:
+  analytics-ai-service-migrate:
     build:
       context: ./services/analytics-ai-service
     image: people-platform/analytics-ai-service:dev
     profiles: [analytics-ai-service]
+    command: ["python", "-m", "analytics_ai.adapters.migrate"]
     depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_MIGRATION_URL: postgresql://analytics_service_owner:${ANALYTICS_DB_OWNER_PASSWORD:-dev-only-change-me}@postgres:5432/analytics_service
+    restart: "no"
+    networks: [people-platform-net]
+
+  analytics-ai-service:
+    image: people-platform/analytics-ai-service:dev
+    profiles: [analytics-ai-service]
+    depends_on:
+      analytics-ai-service-migrate:
+        condition: service_completed_successfully
       kafka-init:
         condition: service_completed_successfully
       keycloak:
         condition: service_healthy
     environment:
       HTTP_PORT: "8000"
+      DATABASE_URL: postgresql://analytics_service_app:${ANALYTICS_DB_APP_PASSWORD:-dev-only-change-me}@postgres:5432/analytics_service
       KAFKA_BROKERS: kafka:9092
       OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT:-8180}/realms/people
       OIDC_JWKS_URL: http://keycloak:8080/realms/people/protocol/openid-connect/certs

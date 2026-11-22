@@ -104,3 +104,51 @@ async def test_tenant_created_stores_settings_once_and_per_tenant(repo):
     settings = await repo.get_tenant_settings(TENANT_A)
     assert settings and settings.analytics_enabled and not settings.ai_enabled
     assert await repo.get_tenant_settings(TENANT_B) is None
+
+
+class _FlakyNineBox:
+    """Repositório que falha uma vez ao gravar o nine box, como um banco que cai no meio da transação."""
+
+    def __init__(self, inner) -> None:
+        self.inner = inner
+        self.failures_left = 1
+
+    def unit_of_work(self, tenant_id):
+        return self.inner.unit_of_work(tenant_id)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+async def test_effect_failure_rolls_back_the_claim_so_redelivery_applies_the_event(repo, monkeypatch):
+    flaky = _FlakyNineBox(repo)
+    original = repo.save_nine_box
+
+    async def failing_once(fact):
+        if flaky.failures_left:
+            flaky.failures_left -= 1
+            raise ConnectionError("banco fora do ar")
+        await original(fact)
+
+    monkeypatch.setattr(repo, "save_nine_box", failing_once)
+    ing = EventIngestor(flaky)
+    event = fixture("nine-box-calibrado")
+    cycle = UUID(event["data"]["cycle_id"])
+
+    with pytest.raises(ConnectionError):
+        await ing.handle(event)
+    assert await repo.list_nine_box(TENANT_A, cycle) == []
+
+    # A reentrega do Kafka não é tratada como duplicata: o registro de "processado" foi desfeito junto.
+    assert await ing.handle(event) is True
+    assert len(await repo.list_nine_box(TENANT_A, cycle)) == 1
+    assert await ing.handle(event) is False
+
+
+async def test_the_same_event_id_in_another_tenant_is_not_a_duplicate(repo):
+    ing = EventIngestor(repo)
+    first = fixture("candidato-contratado")
+    other = {**first, "tenant_id": str(TENANT_B)}
+    assert await ing.handle(first) is True
+    assert await ing.handle(other) is True
+    assert len(await repo.list_employment(TENANT_B)) == 1

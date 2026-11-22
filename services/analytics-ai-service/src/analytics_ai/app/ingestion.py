@@ -28,7 +28,7 @@ from .events import (
     PesquisaClimaEncerradaData,
     TenantCriadoData,
 )
-from .ports import ReadModelRepository
+from .ports import ReadModelRepository, UnitOfWork
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +38,9 @@ class InvalidEventError(ValueError):
 
 
 class EventIngestor:
-    def __init__(self, repo: ReadModelRepository) -> None:
-        self._repo = repo
-        self._handlers: dict[str, Callable[[Envelope], Awaitable[None]]] = {
+    def __init__(self, uow: UnitOfWork) -> None:
+        self._uow = uow
+        self._handlers: dict[str, Callable[[ReadModelRepository, Envelope], Awaitable[None]]] = {
             "TenantCriado": self._tenant_created,
             "CandidatoContratado": self._hired,
             "ColaboradorAtualizado": self._updated,
@@ -59,20 +59,22 @@ class EventIngestor:
         handler = self._handlers.get(envelope.event_type)
         if handler is None or envelope.event_version != 1:
             return False
-        if not await self._repo.claim_event(envelope.tenant_id, envelope.event_id):
-            log.info("evento duplicado ignorado", extra={"event_id": str(envelope.event_id)})
-            return False
-        try:
-            await handler(envelope)
-        except ValidationError as exc:
-            raise InvalidEventError(
-                f"{envelope.event_type} fora do contrato: {exc.error_count()} erro(s)"
-            ) from exc
+        # O tenant do efeito é o do envelope; claim e efeito saem na mesma transação do tenant.
+        async with self._uow.unit_of_work(envelope.tenant_id) as repo:
+            if not await repo.claim_event(envelope.tenant_id, envelope.event_id):
+                log.info("evento duplicado ignorado", extra={"event_id": str(envelope.event_id)})
+                return False
+            try:
+                await handler(repo, envelope)
+            except ValidationError as exc:
+                raise InvalidEventError(
+                    f"{envelope.event_type} fora do contrato: {exc.error_count()} erro(s)"
+                ) from exc
         return True
 
-    async def _tenant_created(self, e: Envelope) -> None:
+    async def _tenant_created(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = TenantCriadoData.model_validate(e.data)
-        await self._repo.save_tenant_settings(
+        await repo.save_tenant_settings(
             TenantSettings(
                 tenant_id=e.tenant_id,
                 slug=d.slug,
@@ -82,19 +84,19 @@ class EventIngestor:
             )
         )
 
-    async def _hired(self, e: Envelope) -> None:
+    async def _hired(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = CandidatoContratadoData.model_validate(e.data)
         # O evento não traz área nem demografia (minimização); ficam como não informado.
-        await self._repo.upsert_employment(
+        await repo.upsert_employment(
             EmploymentRecord(
                 tenant_id=e.tenant_id, employee_id=d.application_id, hired_on=d.start_date, unit=d.unit
             )
         )
 
-    async def _updated(self, e: Envelope) -> None:
+    async def _updated(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = ColaboradorAtualizadoData.model_validate(e.data)
-        current = await self._repo.get_employment(e.tenant_id, d.employee_id)
-        await self._repo.upsert_employment(
+        current = await repo.get_employment(e.tenant_id, d.employee_id)
+        await repo.upsert_employment(
             EmploymentRecord(
                 tenant_id=e.tenant_id,
                 employee_id=d.employee_id,
@@ -106,12 +108,12 @@ class EventIngestor:
             )
         )
 
-    async def _terminated(self, e: Envelope) -> None:
+    async def _terminated(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = ColaboradorDesligadoData.model_validate(e.data)
-        current = await self._repo.get_employment(e.tenant_id, d.employee_id)
+        current = await repo.get_employment(e.tenant_id, d.employee_id)
         # Desligamento chegando antes da atualização (ordem não garantida entre tópicos) cria o vínculo
         # com a data de desligamento como admissão provisória; a próxima atualização corrige hired_on.
-        await self._repo.upsert_employment(
+        await repo.upsert_employment(
             EmploymentRecord(
                 tenant_id=e.tenant_id,
                 employee_id=d.employee_id,
@@ -123,16 +125,16 @@ class EventIngestor:
             )
         )
 
-    async def _assessment(self, e: Envelope) -> None:
+    async def _assessment(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = AvaliacaoConcluidaData.model_validate(e.data)
         gaps = tuple(CompetencyGap(g.competency, g.gap) for g in d.competency_gaps)
-        await self._repo.save_assessment(AssessmentFact(e.tenant_id, d.employee_id, d.cycle_id, gaps))
+        await repo.save_assessment(AssessmentFact(e.tenant_id, d.employee_id, d.cycle_id, gaps))
 
-    async def _nine_box(self, e: Envelope) -> None:
+    async def _nine_box(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = NineBoxCalibradoData.model_validate(e.data)
-        await self._repo.save_nine_box(NineBoxFact(e.tenant_id, d.employee_id, d.cycle_id, d.quadrant))
+        await repo.save_nine_box(NineBoxFact(e.tenant_id, d.employee_id, d.cycle_id, d.quadrant))
 
-    async def _survey(self, e: Envelope) -> None:
+    async def _survey(self, repo: ReadModelRepository, e: Envelope) -> None:
         d = PesquisaClimaEncerradaData.model_validate(e.data)
         segments = tuple(SurveySegment(s.segment_key, s.respondents, s.scores) for s in d.segments)
-        await self._repo.save_survey(SurveyFact(e.tenant_id, d.survey_id, d.min_group_size, segments))
+        await repo.save_survey(SurveyFact(e.tenant_id, d.survey_id, d.min_group_size, segments))

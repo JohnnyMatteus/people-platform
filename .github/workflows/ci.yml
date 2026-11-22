@@ -286,6 +286,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.analytics-ai-service == 'true'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: services/analytics-ai-service
@@ -300,8 +309,10 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Lint (ruff + mypy)
         run: ruff check . && ruff format --check . && mypy src
-      - name: Testes (LLM falso, fixtures dos schemas)
-        run: pytest -q
+      - name: Testes (LLM falso, fixtures dos schemas e read models em Postgres real com RLS)
+        env:
+          ANALYTICS_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pytest -q -rs
       - name: Imagem Docker
         run: docker build -t people-platform/analytics-ai-service:ci .
 

@@ -16,3 +16,5 @@ Cada ADR registra uma decisão relevante no formato Contexto / Decisão / Conseq
 | [0010](0010-infraestrutura-local-e-servicos-emulados.md) | Infraestrutura local: compose por perfis, Postgres com banco por serviço, LocalStack e Mailpit | Aceito |
 | [0011](0011-nucleo-de-dominio-antes-do-framework.md) | performance-service: núcleo de domínio em Kotlin puro antes do Spring Boot | Aceito |
 | [0012](0012-learning-service-em-go.md) | learning-service em Go e vínculo manual da contratação | Proposto |
+| [0013](0013-provisionador-de-organization-no-keycloak.md) | Provisionador de Organization no Keycloak dentro do tenant-service | Aceito |
+| [0014](0014-okrs-modelo-de-acesso-e-limites.md) | OKRs: modelo de acesso e limites (hierarquia de gestão pendente do autor) | Aceito |

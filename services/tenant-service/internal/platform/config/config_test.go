@@ -52,3 +52,22 @@ func TestLoad_FailsFastOnMissingOrInvalid(t *testing.T) {
 		t.Fatal("intervalo inválido deveria falhar")
 	}
 }
+
+func TestLoad_KeycloakProvisioningIsOptInAndNeedsASecret(t *testing.T) {
+	setRequired(t)
+	c, err := Load()
+	if err != nil || c.ProvisioningEnabled() {
+		t.Fatalf("sem KEYCLOAK_URL o provisionamento fica desligado: %v %v", c.ProvisioningEnabled(), err)
+	}
+
+	t.Setenv("KEYCLOAK_URL", "http://keycloak:8080")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "KEYCLOAK_PROVISIONER_CLIENT_SECRET") {
+		t.Fatalf("com KEYCLOAK_URL e sem segredo deveria falhar: %v", err)
+	}
+
+	t.Setenv("KEYCLOAK_PROVISIONER_CLIENT_SECRET", "dev-only-change-me")
+	c, err = Load()
+	if err != nil || !c.ProvisioningEnabled() || c.KeycloakRealm != "people" || c.KeycloakClientID != "people-provisioner" {
+		t.Fatalf("configuração: %+v %v", c, err)
+	}
+}

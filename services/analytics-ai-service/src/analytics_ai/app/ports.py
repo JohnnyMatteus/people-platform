@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
 
@@ -29,6 +30,16 @@ class ReadModelRepository(Protocol):
     async def list_nine_box(self, tenant_id: UUID, cycle_id: UUID) -> list[NineBoxFact]: ...
     async def save_survey(self, fact: SurveyFact) -> None: ...
     async def get_survey(self, tenant_id: UUID, survey_id: UUID) -> SurveyFact | None: ...
+
+
+class UnitOfWork(Protocol):
+    """Unidade de trabalho de um tenant: tudo que acontece dentro vale junto ou não vale.
+
+    O consumidor de eventos precisa disso: registrar o evento como processado e gravar o efeito na mesma transação.
+    Se o efeito falha, o registro some junto, e a reentrega do Kafka aplica o evento em vez de descartá-lo como duplicado.
+    """
+
+    def unit_of_work(self, tenant_id: UUID) -> AbstractAsyncContextManager[ReadModelRepository]: ...
 
 
 class LLMResult(Protocol):

@@ -137,7 +137,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           set -o pipefail
-          gradle --no-daemon --console=plain test build -x ktlintCheck 2>&1 | tee "$RUNNER_TEMP/perf-unit.log"
+          gradle --no-daemon --console=plain --continue test build 2>&1 | tee "$RUNNER_TEMP/perf-unit.log"
       - name: Anotações de erro (performance-service test e build)
         if: ${{ failure() && steps.unit.outcome == 'failure' }}
         run: |

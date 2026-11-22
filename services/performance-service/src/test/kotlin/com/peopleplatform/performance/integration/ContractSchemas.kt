@@ -3,8 +3,8 @@ package com.peopleplatform.performance.integration
 import com.networknt.schema.InputFormat
 import com.networknt.schema.JsonSchemaFactory
 import com.networknt.schema.SpecVersion
-import java.nio.file.Path
 import org.yaml.snakeyaml.Yaml
+import java.nio.file.Path
 import kotlin.test.fail
 
 /** Valida payloads publicados contra os JSON Schemas de `contracts/asyncapi/schemas` (sem rede). */

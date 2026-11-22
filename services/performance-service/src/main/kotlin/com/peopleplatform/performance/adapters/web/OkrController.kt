@@ -4,7 +4,7 @@ import com.peopleplatform.performance.app.CheckInView
 import com.peopleplatform.performance.app.KeyResultView
 import com.peopleplatform.performance.app.ObjectiveService
 import com.peopleplatform.performance.app.ObjectiveView
-import com.peopleplatform.performance.app.parseDecimal
+import com.peopleplatform.performance.app.parseBoundedDecimal
 import com.peopleplatform.performance.domain.okr.KeyResultSpec
 import com.peopleplatform.performance.domain.okr.ObjectiveLevel
 import org.springframework.http.HttpStatus
@@ -99,7 +99,11 @@ class ObjectiveController(private val objectives: ObjectiveService) {
             body.parentId,
             body.title,
             body.keyResults.map {
-                KeyResultSpec(it.title, parseDecimal(it.start, "start"), parseDecimal(it.target, "target"))
+                KeyResultSpec(
+                    it.title,
+                    parseBoundedDecimal(it.start, "start"),
+                    parseBoundedDecimal(it.target, "target"),
+                )
             },
         ).toOut()
 
@@ -125,5 +129,5 @@ class ObjectiveController(private val objectives: ObjectiveService) {
         @PathVariable keyResultId: UUID,
         @RequestBody body: CheckInBody,
     ): CheckInOut =
-        objectives.checkIn(jwt.toCaller(), keyResultId, parseDecimal(body.value, "value"), body.comment).toOut()
+        objectives.checkIn(jwt.toCaller(), keyResultId, parseBoundedDecimal(body.value, "value"), body.comment).toOut()
 }

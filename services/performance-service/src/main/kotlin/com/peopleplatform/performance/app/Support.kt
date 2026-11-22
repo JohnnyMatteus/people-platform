@@ -30,6 +30,24 @@ class ForbiddenException(message: String) : RuntimeException(message)
 fun parseDecimal(raw: String, label: String): BigDecimal =
     raw.toBigDecimalOrNull() ?: throw DomainException("$label '$raw' não é um número")
 
+/** Limite das colunas numeric(18, 4): até 14 dígitos inteiros e 4 decimais. Acima disso o banco responderia 500. */
+private const val MAX_INTEGER_DIGITS = 14
+private const val MAX_FRACTION_DIGITS = 4
+
+/** Como [parseDecimal], mas recusa o que não cabe em numeric(18, 4) (inclusive notação como 1e100000). */
+fun parseBoundedDecimal(raw: String, label: String): BigDecimal {
+    val value = parseDecimal(raw, label)
+    val normalized = value.stripTrailingZeros()
+    val integerDigits = normalized.precision() - normalized.scale()
+    val fractionDigits = maxOf(normalized.scale(), 0)
+    if (value.signum() != 0 && (integerDigits > MAX_INTEGER_DIGITS || fractionDigits > MAX_FRACTION_DIGITS)) {
+        throw DomainException(
+            "$label '$raw' fora do limite: até $MAX_INTEGER_DIGITS dígitos inteiros e $MAX_FRACTION_DIGITS decimais",
+        )
+    }
+    return value
+}
+
 /** Porta de saída de eventos: grava na outbox, na mesma transação da mudança de estado. */
 interface DomainEvents {
     fun publish(

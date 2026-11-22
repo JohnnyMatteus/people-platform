@@ -74,6 +74,10 @@ class ObjectiveService(
             throw DomainException("o objetivo precisa de 1 a $MAX_KEY_RESULTS resultados-chave")
         }
         val owner = authorizeCreation(caller, level, ownerId)
+        // Dono de outra pessoa tem de ser colaborador cadastrado neste tenant (a RLS esconde os de outros).
+        if (owner != null && owner != caller.employeeId.value && !employees.existsById(owner)) {
+            throw NotFoundException("colaborador não encontrado")
+        }
         val parent = parentId?.let {
             objectives.findById(it).orElseThrow { NotFoundException("objetivo pai não encontrado") }
         }

@@ -131,4 +131,54 @@ class OkrIT : IntegrationTestBase() {
             expect = 409,
         )
     }
+
+    @Test
+    fun `dono de outra pessoa precisa ser colaborador do mesmo tenant`() {
+        val a = Scenario(api, UUID.randomUUID())
+        a.runUntilCalibrationOpen()
+        val b = Scenario(api, UUID.randomUUID())
+        b.runUntilCalibrationOpen()
+        val krs = keyResults(Triple("Meta", "0", "10"))
+
+        // Colaborador cadastrado no próprio tenant: aceito. De outro tenant ou inexistente: 404, sem revelar qual.
+        val ok = api.post(
+            "/v1/objectives",
+            a.manager,
+            objective("INDIVIDUAL", "Da Bia", krs, mapOf("owner_id" to a.staff[0].id)),
+        )
+        assertEquals(a.staff[0].id.toString(), ok.get("owner_id").asText())
+        api.post(
+            "/v1/objectives",
+            a.manager,
+            objective("INDIVIDUAL", "Do outro tenant", krs, mapOf("owner_id" to b.staff[0].id)),
+            expect = 404,
+        )
+        api.post(
+            "/v1/objectives",
+            a.manager,
+            objective("TEAM", "Sem dono real", krs, mapOf("owner_id" to UUID.randomUUID())),
+            expect = 404,
+        )
+    }
+
+    @Test
+    fun `valores que nao cabem em numeric 18 4 sao recusados com 422 e nao viram 500`() {
+        val s = Scenario(api, UUID.randomUUID())
+        listOf("1e100000", "100000000000000", "0.00001", "abc").forEach { bad ->
+            api.post(
+                "/v1/objectives",
+                s.manager,
+                objective("TEAM", "Equipe", keyResults(Triple("Meta", "0", bad))),
+                expect = 422,
+            )
+        }
+        val valid = keyResults(Triple("Meta", "0", "10"))
+        val team = api.post("/v1/objectives", s.manager, objective("TEAM", "Equipe", valid))
+        val keyResult = team.get("key_results").get(0).get("id").asText()
+        listOf("1e100000", "99999999999999999999", "0.12345").forEach { bad ->
+            api.post("/v1/key-results/$keyResult/check-ins", s.manager, mapOf("value" to bad), expect = 422)
+        }
+        // O limite exato cabe.
+        api.post("/v1/key-results/$keyResult/check-ins", s.manager, mapOf("value" to "99999999999999.9999"))
+    }
 }

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     oidc_jwks_url: str = Field(alias="OIDC_JWKS_URL")
     oidc_audience: str = Field("people-api", alias="OIDC_AUDIENCE")
 
+    database_url: str = Field(alias="DATABASE_URL")  # usuário da aplicação, sujeito a RLS
+
     kafka_brokers: str = Field("", alias="KAFKA_BROKERS")
     kafka_group_id: str = Field("analytics-ai-service", alias="KAFKA_GROUP_ID")
     kafka_topics: str = Field(

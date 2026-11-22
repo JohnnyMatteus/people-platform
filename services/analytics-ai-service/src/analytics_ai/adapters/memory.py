@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 from collections import defaultdict
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from analytics_ai.domain.models import (
@@ -22,6 +25,17 @@ class InMemoryRepository:
         self._assessments: dict[UUID, dict[UUID, AssessmentFact]] = defaultdict(dict)
         self._nine_box: dict[UUID, dict[tuple[UUID, UUID], NineBoxFact]] = defaultdict(dict)
         self._surveys: dict[UUID, dict[UUID, SurveyFact]] = defaultdict(dict)
+
+    @asynccontextmanager
+    async def unit_of_work(self, tenant_id: UUID) -> AsyncIterator[InMemoryRepository]:
+        """Tudo ou nada: se o bloco falha, o estado volta ao que era (como o rollback do Postgres)."""
+        snapshot = copy.deepcopy(self.__dict__)
+        try:
+            yield self
+        except BaseException:
+            self.__dict__.clear()
+            self.__dict__.update(snapshot)
+            raise
 
     async def claim_event(self, tenant_id: UUID, event_id: UUID) -> bool:
         if event_id in self._events[tenant_id]:

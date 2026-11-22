@@ -87,6 +87,11 @@ class DataSubjectErasureTest extends TestCase
         // O outro tenant, com a mesma pessoa por e-mail, não é tocado.
         $this->assertNotNull(DB::table('candidates')->where('id', $sol['candidate'])->first());
         $this->assertSame(1, DB::table('scorecards')->where('interview_id', $sol['interview'])->count());
+        // A lápide guarda só identificadores, no tenant do pedido.
+        $tombstone = DB::table('erased_subjects')->where('subject_id', $acme['candidate'])->first();
+        $this->assertSame(self::ACME, $tombstone->tenant_id);
+        $this->assertEqualsCanonicalizing(['tenant_id', 'subject_id', 'request_id', 'erased_at'], array_keys((array) $tombstone));
+        $this->assertSame(0, DB::table('erased_subjects')->where('tenant_id', self::SOL)->count());
     }
 
     public function test_evento_de_um_tenant_nao_alcanca_o_titular_de_outro(): void

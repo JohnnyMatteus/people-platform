@@ -10,7 +10,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * LGPD: apaga o que o serviço guarda sobre um titular, só no tenant do evento. Se o titular é um candidato, saem o
+ * LGPD: apaga o que o serviço guarda sobre um titular, só no tenant do evento. subject_id é comparado com os identificadores
+ * que o serviço tem: candidates.id (candidato) e interviewer_id / evaluator_id (colaborador, o `sub` do token). Candidato e
+ * colaborador têm ids diferentes e não há vínculo entre eles, então um pedido alcança só o que casa com o id enviado.
+ * Se o titular é um candidato, saem o
  * cadastro, as candidaturas, as entrevistas, os scorecards e o currículo no S3. Se é um colaborador que entrevistou ou
  * avaliou, a ligação com ele é desfeita (entrevistador some; o avaliador do scorecard vira um identificador novo), e o
  * registro da candidatura de outra pessoa continua.
@@ -59,6 +62,14 @@ final class DataSubjectEraser
                 // Um identificador novo por scorecard desfaz a ligação sem colidir com unique(interview_id, evaluator_id).
                 DB::table('scorecards')->where('id', $id)->update(['evaluator_id' => (string) Str::uuid7()]);
             }
+
+            // Lápide sem dado pessoal, na mesma transação do apagamento.
+            DB::table('erased_subjects')->insertOrIgnore([
+                'tenant_id' => $tenantId,
+                'subject_id' => $subject,
+                'request_id' => (string) $envelope['data']['request_id'],
+                'erased_at' => now()->utc(),
+            ]);
 
             ProcessedEvent::query()->create([
                 'event_id' => $eventId,

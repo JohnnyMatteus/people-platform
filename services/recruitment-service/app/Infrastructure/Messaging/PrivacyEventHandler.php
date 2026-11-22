@@ -45,6 +45,7 @@ final class PrivacyEventHandler implements MessageHandler
         return is_array($d)
             && is_string($e['event_id'] ?? null) && preg_match(self::UUID, $e['event_id']) === 1
             && is_string($e['tenant_id'] ?? null) && preg_match(self::UUID, $e['tenant_id']) === 1
-            && is_string($d['subject_id'] ?? null) && preg_match(self::UUID, $d['subject_id']) === 1;
+            && is_string($d['subject_id'] ?? null) && preg_match(self::UUID, $d['subject_id']) === 1
+            && is_string($d['request_id'] ?? null) && preg_match(self::UUID, $d['request_id']) === 1;
     }
 }

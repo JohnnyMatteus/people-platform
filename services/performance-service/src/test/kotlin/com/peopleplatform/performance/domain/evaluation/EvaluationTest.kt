@@ -25,8 +25,11 @@ class EvaluationTest {
     @Test
     fun `gap e a diferenca absoluta e competencia avaliada so por um lado nao gera gap`() {
         val result = EvaluationConsolidator.consolidate(
-            BigDecimal("4"), scores("Comunicação" to 5, "Entrega" to 3, "Só da pessoa" to 4),
-            BigDecimal("4"), BigDecimal("4"), scores("Comunicação" to 2, "Entrega" to 4, "Só do gestor" to 1),
+            BigDecimal("4"),
+            scores("Comunicação" to 5, "Entrega" to 3, "Só da pessoa" to 4),
+            BigDecimal("4"),
+            BigDecimal("4"),
+            scores("Comunicação" to 2, "Entrega" to 4, "Só do gestor" to 1),
         )
         assertEquals(listOf(CompetencyGap("Comunicação", 3), CompetencyGap("Entrega", 1)), result.gaps)
     }

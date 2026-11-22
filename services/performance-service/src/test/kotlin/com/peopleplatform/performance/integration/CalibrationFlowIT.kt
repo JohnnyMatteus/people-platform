@@ -60,31 +60,40 @@ class CalibrationFlowIT : IntegrationTestBase() {
         val justification = "Entregas do segundo semestre não refletidas na avaliação do gestor."
         // Dora: Q3 (alto/baixo) para Q6 (alto/médio) = 1 faixa de potencial, dentro do limite.
         val adjusted = api.post(
-            "/v1/calibration-sessions/${s.sessionId}/adjustments", s.manager,
+            "/v1/calibration-sessions/${s.sessionId}/adjustments",
+            s.manager,
             mapOf("employee_id" to dora.id, "to" to "Q6", "justification" to justification),
         )
         assertEquals("Q3", adjusted.get("from").asText())
         // Dois saltos de potencial (baixo para alto) excedem o limite padrão de 1 faixa por eixo.
         api.post(
-            "/v1/calibration-sessions/${s.sessionId}/adjustments", s.manager,
-            mapOf("employee_id" to dora.id, "to" to "Q9", "justification" to justification), expect = 422,
+            "/v1/calibration-sessions/${s.sessionId}/adjustments",
+            s.manager,
+            mapOf("employee_id" to dora.id, "to" to "Q9", "justification" to justification),
+            expect = 422,
         )
         api.post(
-            "/v1/calibration-sessions/${s.sessionId}/adjustments", s.manager,
-            mapOf("employee_id" to s.staff[1].id, "to" to "Q6", "justification" to "curta"), expect = 422,
+            "/v1/calibration-sessions/${s.sessionId}/adjustments",
+            s.manager,
+            mapOf("employee_id" to s.staff[1].id, "to" to "Q6", "justification" to "curta"),
+            expect = 422,
         )
         // Quem não está na sessão não pode ser calibrado.
         api.post(
-            "/v1/calibration-sessions/${s.sessionId}/adjustments", s.manager,
-            mapOf("employee_id" to UUID.randomUUID(), "to" to "Q6", "justification" to justification), expect = 422,
+            "/v1/calibration-sessions/${s.sessionId}/adjustments",
+            s.manager,
+            mapOf("employee_id" to UUID.randomUUID(), "to" to "Q6", "justification" to justification),
+            expect = 422,
         )
 
         val closed = api.post("/v1/calibration-sessions/${s.sessionId}/close", s.manager, expect = 200)
         assertEquals("closed", closed.get("status").asText())
         api.post("/v1/calibration-sessions/${s.sessionId}/close", s.manager, expect = 409)
         api.post(
-            "/v1/calibration-sessions/${s.sessionId}/adjustments", s.manager,
-            mapOf("employee_id" to dora.id, "to" to "Q3", "justification" to justification), expect = 409,
+            "/v1/calibration-sessions/${s.sessionId}/adjustments",
+            s.manager,
+            mapOf("employee_id" to dora.id, "to" to "Q3", "justification" to justification),
+            expect = 409,
         )
 
         val events = outboxOf(s.tenant, "NineBoxCalibrado")
@@ -108,8 +117,10 @@ class CalibrationFlowIT : IntegrationTestBase() {
 
         // Ciclo fechado não recebe avaliação nova.
         api.post(
-            "/v1/cycles/${s.cycleId}/evaluations/self", bia,
-            mapOf("performance_score" to "3", "competencies" to emptyList<Any>()), expect = 409,
+            "/v1/cycles/${s.cycleId}/evaluations/self",
+            bia,
+            mapOf("performance_score" to "3", "competencies" to emptyList<Any>()),
+            expect = 409,
         )
         assertEquals("closed", api.get("/v1/cycles", s.admin)[0].get("status").asText())
     }
@@ -122,14 +133,18 @@ class CalibrationFlowIT : IntegrationTestBase() {
         val worker = Person(tenant, EMPLOYEE, name = "Eva Exemplo")
         val cycle = api.post("/v1/cycles", admin, mapOf("name" to "Ciclo 2027", "type" to "self")).get("id").asText()
         api.post(
-            "/v1/cycles/$cycle/evaluations/self", worker,
-            mapOf("performance_score" to "3", "competencies" to emptyList<Any>()), expect = 409,
+            "/v1/cycles/$cycle/evaluations/self",
+            worker,
+            mapOf("performance_score" to "3", "competencies" to emptyList<Any>()),
+            expect = 409,
         )
         api.post("/v1/cycles/$cycle/open", admin, expect = 200)
         api.post("/v1/cycles/$cycle/open", admin, expect = 409)
         api.post(
-            "/v1/cycles/$cycle/evaluations/self", worker,
-            mapOf("performance_score" to "9", "competencies" to emptyList<Any>()), expect = 422,
+            "/v1/cycles/$cycle/evaluations/self",
+            worker,
+            mapOf("performance_score" to "9", "competencies" to emptyList<Any>()),
+            expect = 422,
         )
         val body = mapOf(
             "performance_score" to "3",
@@ -138,7 +153,8 @@ class CalibrationFlowIT : IntegrationTestBase() {
         api.post("/v1/cycles/$cycle/evaluations/self", worker, body)
         api.post("/v1/cycles/$cycle/evaluations/self", worker, body, expect = 409)
         api.post(
-            "/v1/cycles/$cycle/evaluations/manager", manager,
+            "/v1/cycles/$cycle/evaluations/manager",
+            manager,
             mapOf(
                 "employee_id" to manager.id,
                 "performance_score" to "3",
@@ -168,10 +184,13 @@ class CalibrationFlowIT : IntegrationTestBase() {
     }
 
     private fun policyBody(medium: String = "2.5", high: String = "3.75") = mapOf(
-        "scale_min" to "1", "scale_max" to "5",
+        "scale_min" to "1",
+        "scale_max" to "5",
         "performance" to mapOf("medium_from" to medium, "high_from" to high),
         "potential" to mapOf("medium_from" to medium, "high_from" to high),
-        "max_steps_per_axis" to 2, "top_box_warning_share" to "0.15", "min_justification_length" to 10,
+        "max_steps_per_axis" to 2,
+        "top_box_warning_share" to "0.15",
+        "min_justification_length" to 10,
     )
 
     @Test

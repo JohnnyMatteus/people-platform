@@ -31,8 +31,18 @@ class TenantIsolationIT : IntegrationTestBase() {
     private val api by lazy { Api(mvc, json) }
 
     private val rlsTables = listOf(
-        "nine_box_policies", "employees", "cycles", "evaluations", "calibration_sessions", "calibration_placements",
-        "calibration_adjustments", "nine_box_history", "critical_positions", "successors", "pdi_actions", "outbox",
+        "nine_box_policies",
+        "employees",
+        "cycles",
+        "evaluations",
+        "calibration_sessions",
+        "calibration_placements",
+        "calibration_adjustments",
+        "nine_box_history",
+        "critical_positions",
+        "successors",
+        "pdi_actions",
+        "outbox",
     )
 
     private fun countAs(tenant: UUID?, table: String): Long = jdbc.execute { c: java.sql.Connection ->
@@ -59,7 +69,8 @@ class TenantIsolationIT : IntegrationTestBase() {
         a.runUntilCalibrationOpen()
         val dora = a.staff[2]
         api.post(
-            "/v1/calibration-sessions/${a.sessionId}/adjustments", a.manager,
+            "/v1/calibration-sessions/${a.sessionId}/adjustments",
+            a.manager,
             mapOf(
                 "employee_id" to dora.id,
                 "to" to "Q6",
@@ -75,7 +86,8 @@ class TenantIsolationIT : IntegrationTestBase() {
             mapOf("employee_id" to a.staff[0].id, "readiness" to "READY_NOW"),
         )
         api.post(
-            "/v1/employees/${a.staff[0].id}/pdi/actions", a.manager,
+            "/v1/employees/${a.staff[0].id}/pdi/actions",
+            a.manager,
             mapOf(
                 "title" to "Mentoria",
                 "kind" to "MENTORING",
@@ -83,9 +95,11 @@ class TenantIsolationIT : IntegrationTestBase() {
             ),
         )
         api.put(
-            "/v1/nine-box/policy", a.admin,
+            "/v1/nine-box/policy",
+            a.admin,
             mapOf(
-                "scale_min" to "1", "scale_max" to "5",
+                "scale_min" to "1",
+                "scale_max" to "5",
                 "performance" to mapOf("medium_from" to "2.5", "high_from" to "3.75"),
                 "potential" to mapOf("medium_from" to "2.5", "high_from" to "3.75"),
             ),

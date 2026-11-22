@@ -78,7 +78,8 @@ class Scenario(private val api: Api, val tenant: UUID) {
         api.post("/v1/cycles/$cycleId/open", admin, expect = 200)
         staff.forEach {
             api.post(
-                "/v1/employees", manager,
+                "/v1/employees",
+                manager,
                 mapOf(
                     "id" to it.id,
                     "name" to it.name,
@@ -92,13 +93,17 @@ class Scenario(private val api: Api, val tenant: UUID) {
         val scores = listOf(Triple("4.8", "4.6", 5), Triple("3.0", "3.0", 3), Triple("4.5", "2.0", 4))
         staff.zip(scores).forEach { (person, s) ->
             api.post(
-                "/v1/cycles/$cycleId/evaluations/self", person,
+                "/v1/cycles/$cycleId/evaluations/self",
+                person,
                 mapOf("performance_score" to s.first, "competencies" to competencies(s.third, s.third)),
             )
             api.post(
-                "/v1/cycles/$cycleId/evaluations/manager", manager,
+                "/v1/cycles/$cycleId/evaluations/manager",
+                manager,
                 mapOf(
-                    "employee_id" to person.id, "performance_score" to s.first, "potential_score" to s.second,
+                    "employee_id" to person.id,
+                    "performance_score" to s.first,
+                    "potential_score" to s.second,
                     "competencies" to competencies(s.third, 2),
                 ),
             )

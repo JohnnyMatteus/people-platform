@@ -123,13 +123,45 @@ jobs:
         with:
           gradle-version: "8.14.3"
       - name: Lint (ktlint)
-        run: gradle --no-daemon --console=plain ktlintCheck
+        id: lint
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain ktlintCheck 2>&1 | tee "$RUNNER_TEMP/perf-lint.log"
+      - name: Anotações de erro (performance-service ktlint)
+        if: ${{ failure() && steps.lint.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service ktlint" "$RUNNER_TEMP/perf-lint.log" '\.kt:[0-9]+(:[0-9]+)?[: ]' 40
+      # Os passos seguintes rodam mesmo com o lint vermelho, para revelar todos os erros de uma vez; o job continua falhando.
       - name: Testes unitários, de contrato e build
-        run: gradle --no-daemon --console=plain test build
+        id: unit
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain test build -x ktlintCheck 2>&1 | tee "$RUNNER_TEMP/perf-unit.log"
+      - name: Anotações de erro (performance-service test e build)
+        if: ${{ failure() && steps.unit.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service test e build" "$RUNNER_TEMP/perf-unit.log" '^e: |FAILED|Exception|AssertionError|What went wrong|BUILD FAILED|error:' 40
       - name: Testes de integração (Postgres real via testcontainers, RLS e outbox)
-        run: gradle --no-daemon --console=plain integrationTest
+        id: integration
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain integrationTest 2>&1 | tee "$RUNNER_TEMP/perf-it.log"
+      - name: Anotações de erro (performance-service integrationTest)
+        if: ${{ failure() && steps.integration.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service integrationTest" "$RUNNER_TEMP/perf-it.log" '^e: |FAILED|Exception|AssertionError|What went wrong|BUILD FAILED|error:' 40
       - name: Imagem Docker
-        run: docker build -t people-platform/performance-service:ci .
+        id: image
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          docker build --progress=plain -t people-platform/performance-service:ci . 2>&1 | tee "$RUNNER_TEMP/perf-image.log"
+      - name: Anotações de erro (performance-service imagem)
+        if: ${{ failure() && steps.image.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "performance-service imagem" "$RUNNER_TEMP/perf-image.log" 'ERROR|rror:|Problem|failed|FAILED' 40
 
   recruitment-service:
     needs: changes
@@ -183,7 +215,14 @@ jobs:
           DB_MIGRATION_PASSWORD: ci
         run: php artisan test --testsuite=Integration
       - name: Imagem Docker
-        run: docker build -t people-platform/recruitment-service:ci .
+        id: image
+        run: |
+          set -o pipefail
+          docker build --progress=plain -t people-platform/recruitment-service:ci . 2>&1 | tee "$RUNNER_TEMP/recruitment-image.log"
+      - name: Anotações de erro (recruitment-service imagem)
+        if: ${{ failure() && steps.image.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "recruitment-service imagem" "$RUNNER_TEMP/recruitment-image.log" 'ERROR|rror|Problem|requires|does not|failed|FAILED' 40
 
   engagement-service:
     needs: changes
@@ -203,7 +242,14 @@ jobs:
       - name: Lint (eslint + tsc)
         run: make lint
       - name: Testes (unitários + Postgres real via testcontainers)
-        run: make test
+        id: test
+        run: |
+          set -o pipefail
+          make test 2>&1 | tee "$RUNNER_TEMP/engagement-test.log"
+      - name: Anotações de erro (engagement-service testes)
+        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci-annotate.sh" "engagement-service testes" "$RUNNER_TEMP/engagement-test.log" '●|✕|FAIL |Expected|Received|rror|Tests:|Cannot|Docker|container' 40
       - name: Build
         run: make build
       - name: Imagem Docker

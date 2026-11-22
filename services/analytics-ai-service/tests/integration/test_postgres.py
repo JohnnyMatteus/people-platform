@@ -51,6 +51,11 @@ async def repo():
     admin = await asyncpg.connect(ADMIN)
     await admin.execute(f"CREATE ROLE {owner} LOGIN PASSWORD 'ci'")
     await admin.execute(f"CREATE DATABASE {db} OWNER {owner}")
+    # Como no infra/postgres/init: o papel da aplicação já existe, porque o dono do esquema não tem CREATEROLE.
+    await admin.execute(
+        "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analytics_app')"
+        " THEN CREATE ROLE analytics_app NOLOGIN; END IF; END $$"
+    )
     await admin.close()
 
     await migrate(_with(ADMIN, user=owner, password="ci", db=db))

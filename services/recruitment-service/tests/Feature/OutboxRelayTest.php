@@ -54,7 +54,7 @@ class OutboxRelayTest extends TestCase
         $publicada = OutboxMessage::find($id);
         $this->assertNotNull($publicada->published_at);
         $this->assertNull($publicada->last_error);
-        $this->assertSame(3, $publicada->attempts);
+        $this->assertSame(2, $publicada->attempts, 'attempts conta só as falhas');
     }
 
     public function test_tenant_travado_com_mais_pendentes_que_o_lote_nao_impede_os_outros_de_publicar(): void

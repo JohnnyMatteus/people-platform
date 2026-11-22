@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!services/recruitment-service/.env.testing
 config.local.yaml
 data/
 

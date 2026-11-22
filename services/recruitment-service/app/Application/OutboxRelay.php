@@ -67,7 +67,7 @@ final class OutboxRelay
                         continue;
                     }
 
-                    $message->update(['published_at' => now()->utc(), 'attempts' => $message->attempts + 1, 'last_error' => null]);
+                    $message->update(['published_at' => now()->utc(), 'last_error' => null]);
                     $published++;
                 }
             }

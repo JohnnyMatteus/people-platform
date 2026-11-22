@@ -175,6 +175,63 @@ describe('outbox e gamificação idempotente', () => {
     expect(pending.rows[0]).toMatchObject({ attempts: 1, last_error: expect.stringContaining('kafka fora') });
   });
 
+  it('tenant com mensagem envenenada não esgota o lote nem fura a ordem dos outros, e attempts sobe só na linha recusada', async () => {
+    await store.asPlatform((c) => c.query("UPDATE outbox SET published_at = now() WHERE published_at IS NULL"));
+    const seed = async (tenant: string, n: number, startMs: number) => {
+      const ids: string[] = [];
+      for (let i = 0; i < n; i++) {
+        const id = randomUUID();
+        ids.push(id);
+        await store.asPlatform((c) =>
+          c.query(
+            `INSERT INTO outbox (id, tenant_id, aggregate_type, aggregate_id, event_type, event_version, payload, occurred_at)
+             VALUES ($1, $2, 'praise', $1, 'ElogioPublicado', 1, '{}', $3)`,
+            [id, tenant, new Date(startMs + i * 1000)],
+          ),
+        );
+      }
+      return ids;
+    };
+    const t0 = Date.now() - 3_600_000;
+    // A é a mais antiga e tem mais pendentes que o lote (5): sozinha, esgotaria todas as buscas.
+    const a = await seed(TENANT_A, 7, t0);
+    const b = await seed(TENANT_B, 4, t0 + 60_000);
+    const reject = new Set([a[1], b[2]]);
+    const sent: { key: string; id: string }[] = [];
+    const relay = new OutboxRelay(
+      store,
+      {
+        publish: async (msgs) => {
+          const parsed = msgs.map((m) => ({ key: m.key, id: JSON.parse(m.value).event_id as string }));
+          if (parsed.some((m) => reject.has(m.id))) throw new Error('mensagem recusada pelo broker');
+          sent.push(...parsed);
+        },
+      },
+      5,
+    );
+
+    const round = await relay.round();
+    expect(round.sent).toBe(3);
+    expect(round.failures).toHaveLength(2);
+    expect(sent.filter((m) => m.key === TENANT_A).map((m) => m.id)).toEqual([a[0]]);
+    expect(sent.filter((m) => m.key === TENANT_B).map((m) => m.id)).toEqual([b[0], b[1]]);
+
+    const state = await store.asPlatform((c) => c.query('SELECT id, attempts, published_at, last_error FROM outbox WHERE id = ANY($1)', [[...a, ...b]]));
+    const byId = new Map(state.rows.map((r) => [r.id, r]));
+    for (const id of [...a, ...b]) {
+      expect(byId.get(id)!.attempts).toBe(reject.has(id) ? 1 : 0);
+    }
+    expect(byId.get(a[1]!)).toMatchObject({ published_at: null, last_error: expect.stringContaining('recusada') });
+    expect(byId.get(a[2]!)!.published_at).toBeNull();
+    expect(byId.get(b[3]!)!.published_at).toBeNull();
+
+    reject.clear();
+    sent.length = 0;
+    while ((await relay.round()).sent > 0);
+    expect(sent.filter((m) => m.key === TENANT_A).map((m) => m.id)).toEqual(a.slice(1));
+    expect(sent.filter((m) => m.key === TENANT_B).map((m) => m.id)).toEqual(b.slice(2));
+  });
+
   it('reentregar o mesmo evento não duplica pontos', async () => {
     const g = new GamificationService(depsFor(store));
     const e = { event_id: randomUUID(), event_type: 'ElogioPublicado', tenant_id: TENANT_B, data: { from_employee_id: ANA, to_employee_ids: [CARLA] } };

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiAccountOutline, mdiBriefcaseSearchOutline, mdiChartBoxOutline, mdiClipboardTextOutline, mdiForumOutline, mdiGridLarge, mdiSchoolOutline, mdiLogout, mdiSourceBranch, mdiStairs, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountOutline, mdiBriefcaseSearchOutline, mdiChartBoxOutline, mdiClipboardTextOutline, mdiForumOutline, mdiBullseyeArrow, mdiGridLarge, mdiSchoolOutline, mdiLogout, mdiSourceBranch, mdiStairs, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { useLocalStorage } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -22,6 +22,7 @@ const drawer = ref(false)
 const nav = [
   { to: '/avaliacoes', label: 'Avaliações', icon: mdiClipboardTextOutline },
   { to: '/nine-box', label: 'Nine box', icon: mdiGridLarge, roles: ['manager', 'tenant-admin'] },
+  { to: '/metas', label: 'Metas', icon: mdiBullseyeArrow },
   { to: '/pdi', label: 'PDI', icon: mdiSourceBranch },
   { to: '/sucessao', label: 'Sucessão', icon: mdiStairs, roles: ['manager', 'tenant-admin'] },
   { to: '/recrutamento', label: 'Recrutamento', icon: mdiBriefcaseSearchOutline, roles: ['manager', 'tenant-admin'] },

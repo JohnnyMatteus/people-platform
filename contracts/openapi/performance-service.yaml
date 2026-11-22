@@ -30,6 +30,8 @@ tags:
     description: Plano de desenvolvimento individual.
   - name: people
     description: Quem sou eu e o cadastro mínimo de colaboradores do tenant.
+  - name: okr
+    description: Objetivos desdobrados (empresa, equipe, pessoa), resultados-chave e check-ins.
 paths:
   /v1/nine-box/policy:
     get:
@@ -585,6 +587,124 @@ paths:
           $ref: "#/components/responses/Problem"
         "422":
           $ref: "#/components/responses/Problem"
+  /v1/objectives:
+    get:
+      tags: [okr]
+      operationId: listObjectives
+      summary: Objetivos visíveis ao chamador (empresa e equipe para todos; individuais só do próprio e de quem gere).
+      parameters:
+        - name: level
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ObjectiveLevel"
+        - name: owner_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Objetivos, do mais antigo para o mais recente, com progresso calculado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Objective"
+    post:
+      tags: [okr]
+      operationId: createObjective
+      summary: Cria um objetivo com seus resultados-chave. Empresa só o tenant-admin; equipe só gestor; pessoa, a própria ou gestor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateObjective"
+      responses:
+        "201":
+          description: Objetivo criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Objective"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/objectives/{objectiveId}:
+    parameters:
+      - $ref: "#/components/parameters/ObjectiveId"
+    get:
+      tags: [okr]
+      operationId: getObjective
+      summary: Um objetivo com os resultados-chave (de outro tenant, ou individual alheio, responde 404).
+      responses:
+        "200":
+          description: Objetivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Objective"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/objectives/{objectiveId}/close:
+    parameters:
+      - $ref: "#/components/parameters/ObjectiveId"
+    post:
+      tags: [okr]
+      operationId: closeObjective
+      summary: Encerra o objetivo; depois disso não aceita check-in.
+      responses:
+        "200":
+          description: Objetivo encerrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Objective"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/key-results/{keyResultId}/check-ins:
+    parameters:
+      - name: keyResultId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [okr]
+      operationId: checkInKeyResult
+      summary: Registra o valor atual do resultado-chave. Dono do objetivo ou gestor; empresa só o tenant-admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckInInput"
+      responses:
+        "201":
+          description: Check-in registrado; o resultado-chave devolve o progresso atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckIn"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     bearerAuth:
@@ -592,6 +712,13 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    ObjectiveId:
+      name: objectiveId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     CycleId:
       name: cycleId
       in: path
@@ -972,3 +1099,124 @@ components:
                 $ref: "#/components/schemas/PdiActionKind"
               reason:
                 type: string
+    ObjectiveLevel:
+      type: string
+      enum: [COMPANY, TEAM, INDIVIDUAL]
+    KeyResultInput:
+      type: object
+      additionalProperties: false
+      required: [title, start, target]
+      properties:
+        title:
+          type: string
+          minLength: 3
+        start:
+          type: string
+          description: Ponto de partida, decimal como string.
+          examples: ["0"]
+        target:
+          type: string
+          description: Meta, decimal como string; pode ser menor que a partida (reduzir um indicador) e nunca igual a ela.
+          examples: ["100"]
+    CreateObjective:
+      type: object
+      additionalProperties: false
+      required: [level, title, key_results]
+      properties:
+        level:
+          $ref: "#/components/schemas/ObjectiveLevel"
+        title:
+          type: string
+          minLength: 3
+        owner_id:
+          type: string
+          format: uuid
+          description: Obrigatório só para equipe e pessoa de outra pessoa; vazio vale o chamador. Proibido na empresa.
+        parent_id:
+          type: string
+          format: uuid
+          description: Objetivo de nível mais alto de que este se desdobra.
+        key_results:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/KeyResultInput"
+    KeyResult:
+      type: object
+      required: [id, title, start, target, current, progress]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        start:
+          type: string
+        target:
+          type: string
+        current:
+          type: string
+        progress:
+          type: string
+          description: Fração concluída entre 0 e 1.
+    Objective:
+      type: object
+      required: [id, level, title, status, progress, key_results]
+      properties:
+        id:
+          type: string
+          format: uuid
+        level:
+          $ref: "#/components/schemas/ObjectiveLevel"
+        owner_id:
+          type: [string, "null"]
+          format: uuid
+        owner_name:
+          type: [string, "null"]
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, CLOSED]
+        progress:
+          type: string
+          description: Média do progresso dos resultados-chave, entre 0 e 1.
+        key_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/KeyResult"
+    CheckInInput:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value:
+          type: string
+        comment:
+          type: string
+    CheckIn:
+      type: object
+      required: [id, key_result_id, value, created_by, created_at, key_result]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key_result_id:
+          type: string
+          format: uuid
+        value:
+          type: string
+        comment:
+          type: [string, "null"]
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        key_result:
+          $ref: "#/components/schemas/KeyResult"
